@@ -1,0 +1,6 @@
+# Trado - Slice 1 (push-to-talk speech-to-text)
+httpx>=0.27          # talks to the Groq API
+python-dotenv>=1.0   # loads keys from your local .env file
+sounddevice>=0.4.7   # records from the microphone
+numpy>=1.26          # holds the audio samples
+pynput>=1.7.7        # global hold-to-talk hotkey
