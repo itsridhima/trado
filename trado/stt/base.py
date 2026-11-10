@@ -11,6 +11,10 @@ class RateLimitError(SttError):
     """The provider said 'too many requests' (HTTP 429) and retrying did not help."""
 
 
+class UnclearSpeechError(SttError):
+    """The audio was transcribed, but the provider was not confident it was real, clear speech."""
+
+
 class SpeechToTextProvider(ABC):
     @abstractmethod
     def transcribe(self, wav_bytes: bytes) -> str:

@@ -5,7 +5,7 @@ from unittest import mock
 
 import httpx
 
-from trado.stt.base import RateLimitError, SttError
+from trado.stt.base import RateLimitError, SttError, UnclearSpeechError
 from trado.stt.groq_whisper import GroqWhisperProvider
 
 
@@ -53,6 +53,40 @@ class GroqProviderTests(unittest.TestCase):
         post.side_effect = httpx.ConnectError("no internet")
         with self.assertRaises(SttError):
             self.provider.transcribe(b"wav")
+
+
+def seg(text, logprob=-0.2, no_speech=0.01):
+    return {"text": text, "avg_logprob": logprob, "no_speech_prob": no_speech}
+
+
+class ConfidenceTests(unittest.TestCase):
+    def setUp(self):
+        self.provider = GroqWhisperProvider("test-key")
+
+    @mock.patch("trado.stt.groq_whisper.httpx.post")
+    def test_clear_speech_passes(self, post):
+        post.return_value = fake_response(200, {"text": "x", "segments": [seg(" What is a SIP?")]})
+        self.assertEqual(self.provider.transcribe(b"wav"), "What is a SIP?")
+        self.assertAlmostEqual(self.provider.last_confidence, -0.2)
+
+    @mock.patch("trado.stt.groq_whisper.httpx.post")
+    def test_garbled_speech_is_rejected(self, post):
+        post.return_value = fake_response(200, {"text": "x", "segments": [seg(" Vy stocne maj blik.", -1.4)]})
+        with self.assertRaises(UnclearSpeechError):
+            self.provider.transcribe(b"wav")
+
+    @mock.patch("trado.stt.groq_whisper.httpx.post")
+    def test_silence_gives_empty_text(self, post):
+        post.return_value = fake_response(200, {"text": "Thank you.", "segments": [seg(" Thank you.", -1.5, 0.9)]})
+        self.assertEqual(self.provider.transcribe(b"wav"), "")
+
+    @mock.patch("trado.stt.groq_whisper.httpx.post")
+    def test_asks_for_confidence_data_and_sends_language(self, post):
+        post.return_value = fake_response(200, {"text": "ok"})
+        GroqWhisperProvider("k", language="en").transcribe(b"wav")
+        sent = post.call_args.kwargs["data"]
+        self.assertEqual(sent["response_format"], "verbose_json")
+        self.assertEqual(sent["language"], "en")
 
 
 if __name__ == "__main__":

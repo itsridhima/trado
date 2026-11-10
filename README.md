@@ -9,9 +9,10 @@ Trado is an **educator and guide, never an advisor.** See [PRODUCT_RULES.md](PRO
 Inspired by [farzaa/clicky](https://github.com/farzaa/clicky) (MIT). The code here is original.
 
 ## Status
-Early development. **Slice 1 works only:** hold a hotkey, speak, release, and the
-transcribed text is printed in the terminal. Screen capture, AI answers, voice output,
-the overlay and pointing are not built yet.
+Early development (Round 1, "basic Trado"). Hold a hotkey, speak, release: Trado transcribes
+your words, looks at your screen, and answers in text and out loud. Press the hotkey again to
+interrupt. Not built yet: conversation memory, the glowing pointing cursor, the trading knowledge
+base, a tray icon and a first-run setup screen.
 
 ## Limits and privacy
 - **Not financial advice.** Trado explains concepts. It will not tell you what to buy or
@@ -35,9 +36,12 @@ pip install -r requirements.txt
 copy .env.example .env      # then open .env and paste your GROQ_API_KEY
 python -m trado
 ```
+Other handy commands: `python -m trado --mics` (list microphones), `python -m trado --voices` (list voices).
 
 ## Tests
 ```powershell
 python -m unittest discover tests
+python -m tools.run_guardrails
 ```
-Guardrail questions for later slices are in `tests/guardrail_questions.md`.
+The second command asks the AI the questions in `tests/guardrail_questions.md` and reports any
+answer that breaks the product rules (needs your Groq key; takes a few minutes on the free plan).

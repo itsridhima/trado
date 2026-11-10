@@ -63,5 +63,9 @@ class HoldToTalkHotkey:
     def stop(self) -> None:
         self._listener.stop()
 
-    def join(self) -> None:
-        self._listener.join()
+    def is_alive(self) -> bool:
+        return self._listener.is_alive()
+
+    def wait(self, seconds: float) -> None:
+        """Wait a short while. Used in a loop so Ctrl+C can get through (a plain join() blocks it on Windows)."""
+        self._listener.join(seconds)

@@ -27,10 +27,16 @@ Trado is a voice-only AI buddy for Windows that teaches trading and investing
 - Ask before every git commit. Keep commits small with clear messages.
 
 ## Layout
-- `trado/` code, `trado/stt/` speech-to-text providers
+- `trado/` code; `trado/stt/` speech-to-text, `trado/llm/` AI answers, `trado/tts/` voice out (each swappable)
+- `trado/guardrails.py` rule checks; `tools/` helper scripts (guardrail runner)
 - `tests/` tests and `guardrail_questions.md`
 - `docs/` notes
 
 ## Current status
-Slice 1 only: hold hotkey -> record mic -> release -> transcribe -> print text.
-Not built yet: screen capture, AI answers, voice output, overlay, pointing.
+Round 1 (basic Trado, v0.1) is built and tested by the user:
+hold hotkey -> record mic -> Whisper large-v3 (Groq) -> screenshot of the screen under the mouse ->
+streamed vision-AI answer (Groq qwen/qwen3.8-27b) -> spoken sentence by sentence (Windows voice).
+Pressing the hotkey again interrupts. `python -m tools.run_guardrails` checks answers against the product rules.
+Not built yet (Round 2+): memory, pointing and overlay, trading knowledge notes, tray/privacy, first-run setup, installer.
+Plan: build in rounds (basic -> add a few things -> refine); the user tests after each round.
+Free tiers change: Llama 4 Scout was retired in July 2026, so keep model names configurable in `.env`.

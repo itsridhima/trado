@@ -18,3 +18,6 @@ recordings/
 .vscode/
 .idea/
 Thumbs.db
+
+# Optional reports written by the guardrail runner
+report*.md

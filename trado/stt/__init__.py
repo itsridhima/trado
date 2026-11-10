@@ -11,5 +11,7 @@ def create_provider(settings: Settings) -> SpeechToTextProvider:
     if name == "groq":
         from trado.stt.groq_whisper import GroqWhisperProvider
 
-        return GroqWhisperProvider(settings.groq_api_key, language=settings.stt_language)
+        return GroqWhisperProvider(
+            settings.groq_api_key, model=settings.stt_model, language=settings.stt_language
+        )
     raise SttError(f"Unknown speech-to-text provider '{name}'. Available: groq")

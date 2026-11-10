@@ -4,3 +4,6 @@ python-dotenv>=1.0   # loads keys from your local .env file
 sounddevice>=0.4.7   # records from the microphone
 numpy>=1.26          # holds the audio samples
 pynput>=1.7.7        # global hold-to-talk hotkey
+mss>=9.0.1           # screenshots (kept in memory only)
+pillow>=10.3         # shrinks the screenshot before sending
+comtypes>=1.4         # talks to the built-in Windows voice
