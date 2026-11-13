@@ -1,47 +1,94 @@
 # Trado
 
-A voice-only AI buddy for Windows that teaches trading and investing, with an
-India focus. You hold a hotkey and speak; Trado listens, (eventually) looks at your
-screen, answers out loud, and points at things with a glowing cursor.
+A voice-only AI buddy for Windows that **teaches trading and investing**, with an India focus.
+Hold a hotkey, ask a question out loud, and Trado listens, looks at your screen, and answers
+out loud in simple words.
 
-Trado is an **educator and guide, never an advisor.** See [PRODUCT_RULES.md](PRODUCT_RULES.md).
+> **Educational only. Not financial advice.** Trado is an educator and guide, never an adviser.
+> It will not tell you what to buy or sell, give price targets or predictions, or plan your money.
+> It is not a SEBI-registered investment adviser and is not affiliated with SEBI, NSE, BSE or any broker.
+> For personal decisions, talk to a SEBI-registered investment adviser. Trado can be wrong, so check
+> facts with official sources. See [PRODUCT_RULES.md](PRODUCT_RULES.md).
 
-Inspired by [farzaa/clicky](https://github.com/farzaa/clicky) (MIT). The code here is original.
+**Status: early preview (v0.1).** It works, but it is for people comfortable running a Python program.
+There is no installer yet.
 
-## Status
-Early development (Round 1, "basic Trado"). Hold a hotkey, speak, release: Trado transcribes
-your words, looks at your screen, and answers in text and out loud. Press the hotkey again to
-interrupt. Not built yet: conversation memory, the glowing pointing cursor, the trading knowledge
-base, a tray icon and a first-run setup screen.
+## What it does today
+1. You hold a hotkey and speak (you hear a short beep when the mic is ready).
+2. Trado turns your speech into text (Whisper large-v3 on Groq).
+3. It captures the screen under your mouse (in memory only) and asks a vision AI about it.
+4. It shows the answer and **speaks it sentence by sentence** with the built-in Windows voice.
+5. Press the hotkey again at any time to interrupt it.
 
-## Limits and privacy
-- **Not financial advice.** Trado explains concepts. It will not tell you what to buy or
-  sell, give price targets or predictions, or plan your money. For personal decisions,
-  talk to a SEBI-registered investment adviser.
-- **It can be wrong.** Speech recognition and (later) AI answers make mistakes. Check
-  facts with official sources (SEBI, NSE, BSE, RBI, your broker).
-- **Your voice leaves your computer.** Audio is sent to Groq for transcription. It is
-  kept only in memory and **not saved to disk**, but Groq's own policies apply. Don't
-  speak PAN, Aadhaar, passwords, OTPs or bank details.
-- **Later slices will send screenshots** to an AI service. Keep sensitive pages closed.
-- **Free-tier limits.** Free APIs have rate limits; Trado will tell you when you hit one.
-- **Keys stay local** in a gitignored `.env` file.
-- **Trado never acts for you:** no clicking, submitting or typing into forms.
+**Not built yet:** conversation memory, the glowing "pointing" cursor, a built-in trading knowledge
+base, a tray icon, a first-run setup screen and an installer. Only English is supported for now.
 
-## Setup (Windows, PowerShell)
+## What you need
+- Windows 10 or 11, a microphone, and an internet connection
+- [Python 3.11 or newer](https://www.python.org/downloads/) (tick "Add python.exe to PATH" when installing)
+- A **free Groq API key** (see below). Groq's free plan allows only a few questions per minute.
+
+## Set up (Windows PowerShell)
 ```powershell
+git clone https://github.com/itsridhima/trado.git
+cd trado
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-copy .env.example .env      # then open .env and paste your GROQ_API_KEY
+```
+Then get your key:
+1. Make a free account at <https://console.groq.com> and create a key at <https://console.groq.com/keys>.
+2. Save it privately by running `python -m trado --setup`. You paste the key with the screen hidden, and Trado
+   stores it in a private folder on your PC that cloud sync (such as OneDrive) does not copy.
+   **Never share the key or post it anywhere.** (Advanced: copy `.env.example` to `.env` and paste the key
+   after `GROQ_API_KEY=`, but don't keep that file inside a OneDrive or Dropbox folder.)
+3. In the Groq console, look for its data-control settings and consider switching on
+   **Zero Data Retention**, since your questions and screenshots are sent there.
+
+Run it:
+```powershell
 python -m trado
 ```
-Other handy commands: `python -m trado --mics` (list microphones), `python -m trado --voices` (list voices).
+Hold **Ctrl + Left Alt** (change it with `TRADO_HOTKEY` in your key file, e.g. `ctrl+alt` for either Alt key, or `f9`),
+wait for the beep, speak, release.
+If you pick a function key such as `f9`, many laptops need you to hold **Fn** as well. Press **Ctrl+C** to quit.
+
+Handy extras: `python -m trado --mics` lists microphones, `python -m trado --voices` lists voices,
+`python -m trado --where` shows which settings file Trado is using (nothing secret), and
+`python -m trado --set TRADO_HOTKEY=ctrl+alt_l` changes an ordinary setting without editing any file.
+Every setting is explained in `.env.example`.
+
+## Limits and privacy
+- **Your voice and a screenshot leave your computer.** They are sent to Groq to be transcribed and
+  answered. Trado keeps audio and screenshots **in memory only and never saves them to disk**, but
+  Groq's own terms apply. Close anything private first, and never say or show PAN, Aadhaar, passwords,
+  OTPs or bank details. Set `TRADO_SEND_SCREEN=false` to stop sending screenshots.
+- **Trado never acts for you.** It will not click, type or submit anything.
+- **Private pages.** If the window in front looks like a login, KYC, bank or broker page, Trado shows a
+  Yes/No box before sending a screenshot (default answer: No). It only reads the front window's title, so it
+  can miss things, and it can't see other windows or notifications on your screen.
+- **Private details are hidden before the AI sees them.** Things that look like a PAN, Aadhaar or card number,
+  phone number, email or UPI ID, OTP or password are replaced with "[hidden ...]" in your question and in the
+  AI's answer. Your voice clip is uploaded before this happens, so still don't say private details aloud.
+- **It can be wrong.** Speech recognition and AI answers make mistakes, and Trado has no live market data.
+- **Free-tier limits and changes.** Free AI models get retired and limits change. Model names are set in
+  `.env` so you can update them. If something stops working, check `.env.example` and Groq's model list.
+- **No telemetry.** Trado sends nothing anywhere except to Groq, using your own key.
 
 ## Tests
 ```powershell
 python -m unittest discover tests
 python -m tools.run_guardrails
 ```
-The second command asks the AI the questions in `tests/guardrail_questions.md` and reports any
-answer that breaks the product rules (needs your Groq key; takes a few minutes on the free plan).
+The second command asks the AI the questions in `tests/guardrail_questions.md` and reports any answer
+that breaks the product rules (it needs your Groq key and takes a few minutes on the free plan).
+
+## Contributing and security
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Changes are listed in
+[CHANGELOG.md](CHANGELOG.md).
+
+## Credits and licence
+Trado is inspired by [Clicky](https://github.com/farzaa/clicky) by Farza (MIT). Trado is an independent
+Windows project: it uses Clicky's general idea, not its code, and is not affiliated with Clicky or HeyClicky.
+Trado is released under the [MIT License](LICENSE). Libraries it uses are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

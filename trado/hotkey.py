@@ -21,8 +21,20 @@ def _parse_part(name: str) -> set:
     if len(name) == 1:
         return {keyboard.KeyCode.from_char(name)}
     raise ValueError(
-        f"Unknown hotkey part '{name}'. Try f9, f8, space, or a combo like ctrl+shift+space."
+        f"Unknown hotkey part '{name}'. Try ctrl+alt_l, ctrl+alt, f9, space, or a combo like ctrl+shift+space."
     )
+
+
+_FRIENDLY = {
+    "ctrl": "Ctrl", "ctrl_l": "Left Ctrl", "ctrl_r": "Right Ctrl",
+    "alt": "Alt", "alt_l": "Left Alt", "alt_r": "Right Alt", "alt_gr": "AltGr",
+    "shift": "Shift", "shift_l": "Left Shift", "shift_r": "Right Shift", "space": "Space",
+}
+
+
+def describe_hotkey(spec: str) -> str:
+    """Turn 'ctrl+alt_l' into 'Ctrl + Left Alt' for the start-up message."""
+    return " + ".join(_FRIENDLY.get(part.strip().lower(), part.strip().upper()) for part in spec.split("+"))
 
 
 class HoldToTalkHotkey:

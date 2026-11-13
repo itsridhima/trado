@@ -14,7 +14,11 @@ Trado is a voice-only AI buddy for Windows that teaches trading and investing
 - If unsure of a fact, say so rather than guessing.
 
 ## Engineering rules
-- Free only: no paid APIs. Current providers: Groq (speech-to-text), Gemini (later).
+- Free only: no paid APIs. Current provider: Groq (speech and vision AI), with the user's own key.
+  Other providers (Gemini, OpenRouter free models) only as optional extras with a privacy warning: their free
+  tiers may use prompts for training, which is risky for screenshots of financial pages.
+- The project is public and open source (MIT). Never commit keys or personal data; no hosted proxy is planned.
+- Each tested version is tagged, pushed to GitHub and published as a GitHub Release, but only after the user says so.
 - Never ask the user to paste API keys in chat. Keys go in the local `.env` (gitignored).
 - Never save audio to disk by default.
 - Providers (speech-to-text now; LLM and TTS later) sit behind small interfaces so they can be swapped.

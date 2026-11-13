@@ -83,6 +83,147 @@ class SilenceGateTests(unittest.TestCase):
         self.assertFalse(NullSpeaker().is_speaking())
 
 
+class HotkeyTests(unittest.TestCase):
+    def run_keys(self, spec, presses):
+        from pynput.keyboard import Key
+
+        from trado.hotkey import HoldToTalkHotkey
+
+        events = []
+        hotkey = HoldToTalkHotkey(spec, lambda: events.append("start"), lambda: events.append("stop"))
+        for name in presses:
+            hotkey._press(getattr(Key, name))
+        return events
+
+    def test_ctrl_plus_left_alt_only(self):
+        self.assertEqual(self.run_keys("ctrl+alt_l", ["ctrl_l", "alt_l"]), ["start"])
+        self.assertEqual(self.run_keys("ctrl+alt_l", ["ctrl_r", "alt_l"]), ["start"])
+        self.assertEqual(self.run_keys("ctrl+alt_l", ["ctrl_l", "alt_gr"]), [])
+        self.assertEqual(self.run_keys("ctrl+alt_l", ["ctrl_l", "alt_r"]), [])
+        self.assertEqual(self.run_keys("ctrl+alt_l", ["alt_l"]), [])
+        self.assertEqual(self.run_keys("ctrl+alt_l", ["ctrl_l"]), [])
+
+    def test_plain_ctrl_alt_accepts_either_alt(self):
+        self.assertEqual(self.run_keys("ctrl+alt", ["ctrl_l", "alt_r"]), ["start"])
+
+    def test_friendly_names(self):
+        from trado.hotkey import describe_hotkey
+
+        self.assertEqual(describe_hotkey("ctrl+alt_l"), "Ctrl + Left Alt")
+        self.assertEqual(describe_hotkey("f9"), "F9")
+
+
+class KeyFileTests(unittest.TestCase):
+    def test_upsert_replaces_or_adds(self):
+        from trado.keysetup import upsert_env_value
+
+        self.assertEqual(upsert_env_value("A=1\nGROQ_API_KEY=\nB=2\n", "GROQ_API_KEY", "xyz"), "A=1\nGROQ_API_KEY=xyz\nB=2\n")
+        self.assertEqual(upsert_env_value("A=1", "GROQ_API_KEY", "xyz"), "A=1\nGROQ_API_KEY=xyz\n")
+        self.assertEqual(upsert_env_value("", "GROQ_API_KEY", "xyz"), "GROQ_API_KEY=xyz\n")
+
+    def test_synced_folder_detection(self):
+        from pathlib import Path
+
+        env = {"OneDrive": r"C:\Users\someone\OneDrive"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertTrue(config.is_synced_path(Path(r"C:\Users\someone\OneDrive\Desktop\trado\.env")))
+            self.assertTrue(config.is_synced_path(Path(r"C:\Users\someone\Dropbox\proj\.env")))
+            self.assertFalse(config.is_synced_path(Path(r"C:\Users\someone\AppData\Local\Trado\.env")))
+
+    def test_private_folder_is_preferred_over_project_folder(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            private = Path(tmp) / "Trado" / ".env"
+            private.parent.mkdir()
+            private.write_text("GROQ_API_KEY=from-private\n", encoding="utf-8")
+            with mock.patch.dict(os.environ, {"LOCALAPPDATA": tmp}, clear=True):
+                self.assertEqual(config.find_env_file(), private)
+
+    def test_explicit_env_file_wins(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            chosen = Path(tmp) / "mine.env"
+            chosen.write_text("X=1\n", encoding="utf-8")
+            with mock.patch.dict(os.environ, {"TRADO_ENV_FILE": str(chosen), "LOCALAPPDATA": tmp}, clear=True):
+                self.assertEqual(config.find_env_file(), chosen)
+
+    def test_environment_override_is_reported_by_name_only(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            chosen = Path(tmp) / "mine.env"
+            chosen.write_text("TRADO_HOTKEY=ctrl+alt_l\nTRADO_VOICE=Zira\n", encoding="utf-8")
+            env = {"TRADO_ENV_FILE": str(chosen), "TRADO_HOTKEY": "f9", "TRADO_VOICE": "Zira"}
+            with mock.patch.dict(os.environ, env, clear=True):
+                settings = config.load_settings()
+            self.assertEqual(settings.hotkey, "f9")  # the environment wins...
+            self.assertEqual(settings.env_overrides, ("TRADO_HOTKEY",))  # ...and Trado says so (same value is not an override)
+
+    def test_set_command_changes_one_setting_and_keeps_the_rest(self):
+        import tempfile
+        from pathlib import Path
+
+        from trado import keysetup
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"LOCALAPPDATA": tmp}, clear=True):
+            private = Path(tmp) / "Trado" / ".env"
+            private.parent.mkdir()
+            private.write_text("GROQ_API_KEY=keep-me-123\nTRADO_HOTKEY=f9\nTRADO_VOICE=Zira\n", encoding="utf-8")
+            message = keysetup.set_setting("TRADO_HOTKEY=ctrl+alt_l")
+            self.assertIn("Saved", message)
+            self.assertNotIn("keep-me-123", message)
+            self.assertEqual(
+                private.read_text(encoding="utf-8"),
+                "GROQ_API_KEY=keep-me-123\nTRADO_HOTKEY=ctrl+alt_l\nTRADO_VOICE=Zira\n",
+            )
+
+    def test_set_command_refuses_bad_input_and_secrets(self):
+        import tempfile
+        from pathlib import Path
+
+        from trado import keysetup
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"LOCALAPPDATA": tmp}, clear=True):
+            for bad in ["", "TRADO_HOTKEY", "GROQ_API_KEY=abc", "NOT_A_SETTING=1", "TRADO_HOTKEY=ctrl+banana"]:
+                self.assertNotIn("Saved", keysetup.set_setting(bad), bad)
+            self.assertFalse((Path(tmp) / "Trado" / ".env").exists())
+
+    def test_setup_saves_key_without_printing_it(self):
+        import io
+        import tempfile
+        from contextlib import redirect_stdout
+        from pathlib import Path
+
+        from trado import keysetup
+
+        fake_key = "gsk_FAKE_TEST_KEY_0123456789abcdef"
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"LOCALAPPDATA": tmp}, clear=True):
+            out = io.StringIO()
+            with mock.patch("trado.keysetup.getpass.getpass", return_value=fake_key), redirect_stdout(out):
+                keysetup.run_setup()
+            saved = (Path(tmp) / "Trado" / ".env").read_text(encoding="utf-8")
+            self.assertIn(f"GROQ_API_KEY={fake_key}", saved)
+            self.assertNotIn(fake_key, out.getvalue())  # never echoed
+
+    def test_setup_rejects_junk(self):
+        import io
+        import tempfile
+        from contextlib import redirect_stdout
+        from pathlib import Path
+
+        from trado import keysetup
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"LOCALAPPDATA": tmp}, clear=True):
+            with mock.patch("trado.keysetup.getpass.getpass", return_value="too short"), redirect_stdout(io.StringIO()):
+                keysetup.run_setup()
+            self.assertFalse((Path(tmp) / "Trado" / ".env").exists())
+
+
 class SettingsTests(unittest.TestCase):
     def load(self, **env):
         with mock.patch.dict(os.environ, env, clear=True), mock.patch("trado.config.load_dotenv"):
@@ -91,7 +232,7 @@ class SettingsTests(unittest.TestCase):
     def test_defaults(self):
         s = self.load()
         self.assertEqual((s.hotkey, s.stt_model, s.stt_language, s.tts_provider, s.tts_rate),
-                         ("f9", "whisper-large-v3", "en", "windows", 1))
+                         ("ctrl+alt_l", "whisper-large-v3", "en", "windows", 1))
 
     def test_overrides_and_limits(self):
         s = self.load(TRADO_STT_MODEL="whisper-large-v3-turbo", TRADO_STT_LANGUAGE="auto",

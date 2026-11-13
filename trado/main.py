@@ -5,9 +5,11 @@ import threading
 
 from trado.audio import Recorder, is_too_quiet, list_input_devices
 from trado.config import load_settings
-from trado.hotkey import HoldToTalkHotkey
+from trado.hotkey import HoldToTalkHotkey, describe_hotkey
 from trado.llm import LlmError, create_llm_provider
+from trado.privacy import redact_sensitive
 from trado.screen import capture_screen_jpeg, make_dpi_aware
+from trado.sensitive_page import PageGuard
 from trado.stt import SttError, create_provider
 from trado.tts import NullSpeaker, TtsError, create_speaker
 from trado.tts.text import SentenceSplitter, clean_for_speech
@@ -23,6 +25,34 @@ def _beep() -> None:
         pass
 
 
+def _print_where() -> None:
+    """`python -m trado --where`: show where the settings come from. Prints no key and no private text."""
+    import os
+    from pathlib import Path
+
+    from dotenv import dotenv_values
+
+    from trado import config
+
+    print("Trado settings check (nothing secret is shown)")
+    print(f"  Python program:        {sys.executable}")
+    print(f"  Trado code folder:     {Path(config.__file__).parent}")
+    print(f"  TRADO_ENV_FILE set in Windows environment: {os.environ.get('TRADO_ENV_FILE') or 'no'}")
+    print(f"  TRADO_HOTKEY set in Windows environment:   {os.environ.get('TRADO_HOTKEY') or 'no'}")
+    for label, path in (("private settings file", config.private_env_path()), ("project .env file", config.PROJECT_ROOT / ".env")):
+        if path and path.is_file():
+            values = dotenv_values(path)
+            print(f"  {label}: found at {path}")
+            print(f"      TRADO_HOTKEY in it = {values.get('TRADO_HOTKEY')!r}, key filled in = {bool(values.get('GROQ_API_KEY'))}")
+        else:
+            print(f"  {label}: not found")
+    settings = config.load_settings()
+    print(f"  Settings file Trado actually uses: {settings.env_file or 'none'}")
+    print(f"  Hotkey Trado will use: {describe_hotkey(settings.hotkey)}   (setting text: {settings.hotkey!r})")
+    if settings.env_overrides:
+        print(f"  Overridden by the Windows environment: {', '.join(settings.env_overrides)}")
+
+
 def main() -> None:
     if "--mics" in sys.argv:
         print("Microphones Trado can use (put the number or part of the name in TRADO_MIC_DEVICE):")
@@ -35,6 +65,22 @@ def main() -> None:
         print("Voices Trado can use (put part of the name in TRADO_VOICE):")
         for name in list_voices():
             print(f"  {name}")
+        return
+
+    if "--where" in sys.argv:
+        _print_where()
+        return
+    if "--set" in sys.argv:
+        from trado.keysetup import set_setting
+
+        position = sys.argv.index("--set")
+        argument = sys.argv[position + 1] if position + 1 < len(sys.argv) else ""
+        print(set_setting(argument))
+        return
+    if "--setup" in sys.argv:
+        from trado.keysetup import run_setup
+
+        run_setup()
         return
 
     make_dpi_aware()
@@ -54,6 +100,8 @@ def main() -> None:
     except TtsError as err:
         print(f"Voice problem: {err}\n  Carrying on with text only.")
         speaker = NullSpeaker()
+
+    page_guard = PageGuard(settings.sensitive_pages)
 
     # Each press of the hotkey starts a new "turn". Work belonging to an older turn
     # quietly stops itself, which is how pressing the key interrupts Trado.
@@ -88,35 +136,47 @@ def main() -> None:
             if not question:
                 print("(I didn't catch any words.)")
                 return
+            question, hidden = redact_sensitive(question)  # private-looking details never reach the AI
+            if hidden:
+                print("(I hid what looked like private details in your words before asking the AI. Please don't say them aloud.)")
             print(f'You said: "{question}"')
 
             image = None
             if settings.send_screen:
-                try:
-                    image = capture_screen_jpeg()  # kept in memory only
-                except Exception as err:
-                    print(f"(Couldn't capture the screen: {type(err).__name__}. Answering without it.)")
+                allowed, note = page_guard.check()  # may show a Yes/No box on login, KYC, bank or broker pages
+                if note:
+                    print(note)
+                if not is_current(turn):
+                    return
+                if allowed:
+                    try:
+                        image = capture_screen_jpeg()  # kept in memory only
+                    except Exception as err:
+                        print(f"(Couldn't capture the screen: {type(err).__name__}. Answering without it.)")
 
             print("Thinking...")
             started = False
             splitter = SentenceSplitter()
 
-            def speak(sentences: list[str]) -> None:
+            def emit(sentences: list[str]) -> None:
+                """Show and speak finished sentences, after hiding anything that looks like private details."""
+                nonlocal started
                 for sentence in sentences:
-                    spoken = clean_for_speech(sentence)
-                    if spoken and is_current(turn):
+                    if not is_current(turn):
+                        return
+                    shown, _ = redact_sensitive(sentence)
+                    print(("" if started else "Trado: ") + shown + " ", end="", flush=True)
+                    started = True
+                    spoken = clean_for_speech(shown)
+                    if spoken:
                         speaker.say(spoken)
 
             try:
                 for piece in llm.stream_answer(question, image):
                     if not is_current(turn):
                         return  # you pressed the key again: stop quietly
-                    if not started:
-                        print("Trado: ", end="", flush=True)
-                        started = True
-                    print(piece, end="", flush=True)
-                    speak(splitter.feed(piece))
-                speak(splitter.flush())
+                    emit(splitter.feed(piece))
+                emit(splitter.flush())
                 print()
             except LlmError as err:
                 if is_current(turn):
@@ -162,13 +222,22 @@ def main() -> None:
 
     voice_note = "text only" if isinstance(speaker, NullSpeaker) else f"voice: {settings.tts_voice or 'Windows default'}"
     print("Trado (Round 1: talk, see your screen, answer out loud)")
-    print(f"Hold [{hotkey_spec.upper()}] and speak after the beep. Release to ask. Press it again to stop Trado talking. Ctrl+C quits (or Ctrl+Break).")
+    print("Educational only, not financial advice. For personal decisions, ask a SEBI-registered adviser.")
+    print(f"Hold [{describe_hotkey(hotkey_spec)}] and speak after the beep. Release to ask. Press it again to stop Trado talking. Ctrl+C quits (or Ctrl+Break).")
     print(f"Speech: {settings.stt_model}   AI: {settings.llm_model}   Language: {settings.stt_language or 'auto-detect'}   {voice_note}")
     if settings.send_screen:
         print("Privacy: your voice and a screenshot of the screen under your mouse are sent to Groq.")
         print("         Close anything private first. Set TRADO_SEND_SCREEN=false to turn screenshots off.")
+        guard_text = {"ask": "asks you first", "skip": "skips the screenshot", "send": "is OFF"}[settings.sensitive_pages]
+        print(f"         Login, KYC, bank and broker pages: Trado {guard_text} (TRADO_SENSITIVE_PAGES=ask|skip|send).")
     else:
         print("Screenshots are OFF (TRADO_SEND_SCREEN=false). Only your question is sent.")
+    if settings.env_overrides:
+        print(f"NOTE: {', '.join(settings.env_overrides)} come(s) from your Windows environment and override your settings file.")
+        print("      To use the file instead, remove it from the environment (in PowerShell: Remove-Item Env:NAME).")
+    if settings.env_file_synced:
+        print("WARNING: your key file is inside a cloud-synced folder (such as OneDrive), so your key may be copied")
+        print("         to the cloud. Run  python -m trado --setup  to keep it in a private local folder instead.")
     hotkey.start()
     try:
         while hotkey.is_alive():

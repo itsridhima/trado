@@ -1,15 +1,16 @@
-"""Settings, read from environment variables (and the local .env file)."""
+"""Settings, read from environment variables (and a local .env file)."""
 
 import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULT_LLM_MODEL = "qwen/qwen3.8-27b"
 DEFAULT_STT_MODEL = "whisper-large-v3"  # the full model: a little slower than turbo, a little more accurate
+SENSITIVE_PAGE_MODES = ("ask", "skip", "send")
 
 
 def _int(name: str, default: int, low: int, high: int) -> int:
@@ -35,6 +36,48 @@ def _language() -> str:
     return value or "en"
 
 
+def _sensitive_mode() -> str:
+    value = os.getenv("TRADO_SENSITIVE_PAGES", "").strip().lower()
+    return value if value in SENSITIVE_PAGE_MODES else "ask"
+
+
+# ---------- where the secret file lives ----------
+
+def private_env_path() -> Path | None:
+    """The preferred home for your key file: a private folder that cloud sync does not touch."""
+    local = os.environ.get("LOCALAPPDATA", "").strip()
+    return Path(local) / "Trado" / ".env" if local else None
+
+
+def find_env_file() -> Path | None:
+    """First existing of: TRADO_ENV_FILE, the private local folder, then the project folder."""
+    candidates: list[Path] = []
+    explicit = os.environ.get("TRADO_ENV_FILE", "").strip()
+    if explicit:
+        candidates.append(Path(explicit))
+    private = private_env_path()
+    if private:
+        candidates.append(private)
+    candidates.append(PROJECT_ROOT / ".env")
+    return next((p for p in candidates if p.is_file()), None)
+
+
+_SYNC_FOLDER_WORDS = ("onedrive", "dropbox", "google drive", "icloud")
+
+
+def is_synced_path(path: Path) -> bool:
+    """True if the path looks like it sits inside a cloud-synced folder (OneDrive, Dropbox, ...)."""
+    try:
+        text = str(path.resolve()).lower()
+    except OSError:
+        text = str(path).lower()
+    for var in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+        root = os.environ.get(var, "").strip().lower().rstrip("\\/")
+        if root and text.startswith(root):
+            return True
+    return any(word in part for part in Path(text).parts for word in _SYNC_FOLDER_WORDS)
+
+
 @dataclass(frozen=True)
 class Settings:
     groq_api_key: str
@@ -52,13 +95,23 @@ class Settings:
     llm_model: str
     llm_reasoning: str  # "" means don't send the setting
     send_screen: bool
+    sensitive_pages: str  # "ask", "skip" or "send": what to do when the screen looks like a login/KYC/bank/broker page
+    env_file: str  # which key file was loaded ("" if none)
+    env_file_synced: bool  # True if that file is inside a cloud-synced folder
+    env_overrides: tuple  # names of settings where the Windows environment overrides the key file
 
 
 def load_settings() -> Settings:
-    load_dotenv(PROJECT_ROOT / ".env")
+    env_file = find_env_file()
+    overrides: tuple[str, ...] = ()
+    if env_file:
+        # Values already set in the Windows environment win over the file. Remember which ones differ (names only).
+        file_values = dotenv_values(env_file)
+        overrides = tuple(sorted(k for k, v in file_values.items() if k in os.environ and os.environ[k] != (v or "")))
+        load_dotenv(env_file)
     return Settings(
         groq_api_key=os.getenv("GROQ_API_KEY", "").strip(),
-        hotkey=os.getenv("TRADO_HOTKEY", "f9").strip() or "f9",
+        hotkey=os.getenv("TRADO_HOTKEY", "ctrl+alt_l").strip() or "ctrl+alt_l",
         stt_provider=os.getenv("TRADO_STT_PROVIDER", "groq").strip().lower() or "groq",
         stt_language=_language(),
         stt_model=os.getenv("TRADO_STT_MODEL", "").strip() or DEFAULT_STT_MODEL,
@@ -72,4 +125,8 @@ def load_settings() -> Settings:
         llm_model=os.getenv("TRADO_LLM_MODEL", "").strip() or DEFAULT_LLM_MODEL,
         llm_reasoning=os.getenv("TRADO_LLM_REASONING", "none").strip(),
         send_screen=_flag("TRADO_SEND_SCREEN", True),
+        sensitive_pages=_sensitive_mode(),
+        env_file=str(env_file) if env_file else "",
+        env_file_synced=bool(env_file and is_synced_path(env_file)),
+        env_overrides=overrides,
     )
