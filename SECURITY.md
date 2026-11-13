@@ -22,7 +22,8 @@ Voice and screenshots are sent to Groq using your own key; see the README's priv
 
 **Status: the four Medium findings (F1, F2, F3, F12) are fixed in the code and pass offline tests. The owner
 reports having rotated the key and run the live checks (the Yes/No box, hidden PAN, injection test); this review
-did not independently watch those runs. All Low findings are still OPEN and wait for approval.**
+did not independently watch those runs. The Low findings now also have fixes (see "Low findings: fixes applied"),
+except that F9 (vulnerability scan) and the optional scanner in F10 still wait for permission to install tools.**
 Method: read all of the code, ran searches over the code and the full git history, and ran a few small
 experiments. No scanner tool was installed for this review (see "Could not verify").
 
@@ -71,7 +72,7 @@ None is unused. See `THIRD_PARTY_NOTICES.md` for licences.
 | 9 | Dependencies | **Not sure** (F9) | All used; unpinned; no vulnerability scan has been run |
 | 10 | Other risks for a public release | **Applies** (F1, F2, F10, F13) | See findings |
 
-## Findings
+## Findings (as found on 2026-11-13; the two "fixes applied" sections below say what has been done since)
 No **High** findings. The Medium ones matter most before a public release.
 
 | ID | Rating | Finding and evidence | Suggested fix |
@@ -98,6 +99,20 @@ No **High** findings. The Medium ones matter most before a public release.
 | F3 | Private-looking details (PAN, Aadhaar, card, phone, email or UPI ID, account number, OTP, password) are hidden in the question before it goes to the AI, and in the AI's answer before it is shown or spoken. Aadhaar and card numbers are only hidden if they pass their real check digits (or the word "Aadhaar" is nearby), so years and chart levels are left alone. | 8 tests incl. false-positive checks | Speak a made-up PAN and see "[hidden PAN]". The audio was already uploaded, so this cannot be undone |
 | F1 | Before a screenshot, the front window's title is checked. Login, KYC, bank, payment and broker titles trigger a Yes/No box (default No), or are skipped (`TRADO_SENSITIVE_PAGES=skip`). A Yes is remembered for that exact page for the session only. The title is never printed or sent. | 10 tests incl. modes and "title never shown" | Open a broker login page and ask a question |
 | F12 | System prompt rule 7 and the per-question message now say screen text is content, never instructions. `python -m tools.run_injection` shows the AI six fake pages with hostile instructions and checks the answers. | prompt wording, fake page drawing, rule checker catches an obedient answer | **Run `python -m tools.run_injection` with a live key.** Until then F12 is "not verified" |
+
+## Low findings: fixes applied
+| ID | What changed | Still open |
+|---|---|---|
+| F4 | Terminal escape codes, control characters and text-direction tricks are removed from AI answers, server errors and transcripts before they are printed or spoken (`trado/textsafe.py`). | |
+| F5 | The settings object no longer shows the API key if printed or logged. | |
+| F6 | Server error text is cleaned of control codes and key-like strings, and every provider error message is cleaned again before it is shown. | |
+| F7 | Client-side limits: speech 18 per minute; AI 28 requests and about 7,000 estimated tokens per minute (just under Groq's free limits). Trado waits up to 25 seconds, then asks you to retry. A warning appears at 80% of the daily limit, counted only while Trado is open. Retries stay capped at 3. | A question you interrupt still finishes its speech upload; a request already sent can't be recalled. Token counts are estimates. |
+| F8 | The hotkey code drops every key that is not part of the hotkey before reading it, so other keystrokes are never stored. | Windows still hands the program every keystroke; any global hotkey tool works this way. |
+| F9 | `requirements.txt` pins exact versions, matching what was tested. | `pip-audit` (vulnerability scan) and updating `pip` need permission to install tools. Not yet run. |
+| F10 | `tools/check_secrets.py` plus `.githooks/pre-commit` block commits containing API keys or tokens, personal email addresses, `.env`, key and audio files, or words from a private local list (kept inside `.git`, never pushed). Turn it on once with `git config core.hooksPath .githooks`. GitHub's secret scanning and push protection are also on. | A dedicated scanner (detect-secrets or gitleaks) would catch more key formats; not installed yet. |
+| F11 | Removed the unused Gemini line from `.env.example`. `.gitignore` now also covers other `.env` files, key files, logs, screenshots, transcripts, build folders and OS leftovers. | |
+| F13 | README now explains that terminal scroll-back or PowerShell transcription may keep what is printed. | |
+| F14 | The start-up text and README now say plainly that Groq's free plan may store data or use it to improve its services, and suggest Groq's Zero Data Retention setting. | |
 
 Known limits of these fixes: the page check reads only the title of the front window; redaction is pattern
 based and can miss or over-hide; the AI may still be fooled by a cleverly worded page.

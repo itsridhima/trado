@@ -11,6 +11,7 @@ from trado.privacy import redact_sensitive
 from trado.screen import capture_screen_jpeg, make_dpi_aware
 from trado.sensitive_page import PageGuard
 from trado.stt import SttError, create_provider
+from trado.textsafe import sanitize_message, strip_control
 from trado.tts import NullSpeaker, TtsError, create_speaker
 from trado.tts.text import SentenceSplitter, clean_for_speech
 
@@ -125,7 +126,7 @@ def main() -> None:
                 question = stt.transcribe(wav)
             except SttError as err:
                 if is_current(turn):
-                    print(f"Sorry: {err}")
+                    print(f"Sorry: {sanitize_message(str(err))}")
                 return
             if not is_current(turn):
                 return
@@ -136,7 +137,7 @@ def main() -> None:
             if not question:
                 print("(I didn't catch any words.)")
                 return
-            question, hidden = redact_sensitive(question)  # private-looking details never reach the AI
+            question, hidden = redact_sensitive(strip_control(question))  # private-looking details never reach the AI
             if hidden:
                 print("(I hid what looked like private details in your words before asking the AI. Please don't say them aloud.)")
             print(f'You said: "{question}"')
@@ -164,7 +165,7 @@ def main() -> None:
                 for sentence in sentences:
                     if not is_current(turn):
                         return
-                    shown, _ = redact_sensitive(sentence)
+                    shown, _ = redact_sensitive(strip_control(sentence))
                     print(("" if started else "Trado: ") + shown + " ", end="", flush=True)
                     started = True
                     spoken = clean_for_speech(shown)
@@ -180,7 +181,8 @@ def main() -> None:
                 print()
             except LlmError as err:
                 if is_current(turn):
-                    print(f"\nSorry: {err}" if started else f"Sorry: {err}")
+                    message = sanitize_message(str(err))
+                    print(f"\nSorry: {message}" if started else f"Sorry: {message}")
         except Exception as err:  # never let one bad request kill the app
             if is_current(turn):
                 print(f"\nUnexpected error ({type(err).__name__}). Please try again.")
@@ -227,7 +229,9 @@ def main() -> None:
     print(f"Speech: {settings.stt_model}   AI: {settings.llm_model}   Language: {settings.stt_language or 'auto-detect'}   {voice_note}")
     if settings.send_screen:
         print("Privacy: your voice and a screenshot of the screen under your mouse are sent to Groq.")
-        print("         Close anything private first. Set TRADO_SEND_SCREEN=false to turn screenshots off.")
+        print("         Groq's free plan may store this data or use it to improve its services (check Groq's terms;")
+        print("         its Zero Data Retention setting is worth switching on). Close anything private first.")
+        print("         Set TRADO_SEND_SCREEN=false to turn screenshots off.")
         guard_text = {"ask": "asks you first", "skip": "skips the screenshot", "send": "is OFF"}[settings.sensitive_pages]
         print(f"         Login, KYC, bank and broker pages: Trado {guard_text} (TRADO_SENSITIVE_PAGES=ask|skip|send).")
     else:

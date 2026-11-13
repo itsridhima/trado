@@ -42,6 +42,8 @@ class HoldToTalkHotkey:
 
     def __init__(self, spec: str, on_press: Callable[[], None], on_release: Callable[[], None]):
         self._required = [_parse_part(p) for p in spec.split("+")]
+        self._relevant = set().union(*self._required)  # every key that can be part of the hotkey
+        self._needs_letters = any(isinstance(k, keyboard.KeyCode) for k in self._relevant)
         self._on_press = on_press
         self._on_release = on_release
         self._down: set = set()
@@ -57,13 +59,24 @@ class HoldToTalkHotkey:
             return keyboard.KeyCode.from_char(key.char.lower())
         return key
 
+    def _is_ours(self, key) -> bool:
+        """True only for keys that are part of the hotkey. Any other key is dropped right here, without being
+        read, stored or logged. (Windows hands this program every key you type; this is how we ignore them.)"""
+        if isinstance(key, keyboard.KeyCode):
+            return self._needs_letters and self._normalise(key) in self._relevant
+        return key in self._relevant
+
     def _press(self, key) -> None:
+        if not self._is_ours(key):
+            return
         self._down.add(self._normalise(key))
         if not self._active and self._is_held():
             self._active = True
             self._on_press()
 
     def _release(self, key) -> None:
+        if not self._is_ours(key):
+            return
         self._down.discard(self._normalise(key))
         if self._active and not self._is_held():
             self._active = False

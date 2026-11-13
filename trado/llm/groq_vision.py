@@ -7,14 +7,18 @@ from typing import Callable, Iterator
 
 import httpx
 
+from trado.limits import LimitReached, RateLimiter, UsageCounter
 from trado.llm.base import LlmError, LlmProvider, LlmRateLimitError
 from trado.prompts import SYSTEM_PROMPT, build_user_text
+from trado.textsafe import sanitize_message
 
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "qwen/qwen3.8-27b"
 
 MAX_ATTEMPTS = 3
 MAX_WAIT_SECONDS = 45.0
+TEXT_TOKEN_COST = 1000  # rough size of the prompt plus a short answer, for the per-minute token limit
+IMAGE_TOKEN_COST = 2100  # each screenshot counts as about 2,048 tokens on Groq
 MAX_ANSWER_TOKENS = 350  # answers are short; this also protects the free tokens-per-minute limit
 
 
@@ -61,10 +65,12 @@ class ThinkFilter:
 
 
 def _error_text(raw: bytes) -> str:
+    """The server's error message, with control codes and anything key-like removed."""
     try:
-        return str(json.loads(raw).get("error", {}).get("message", ""))
+        text = str(json.loads(raw).get("error", {}).get("message", ""))
     except Exception:
-        return raw.decode("utf-8", "ignore")[:300]
+        text = raw.decode("utf-8", "ignore")[:300]
+    return sanitize_message(text)
 
 
 class GroqVisionProvider(LlmProvider):
@@ -83,6 +89,10 @@ class GroqVisionProvider(LlmProvider):
         self._model = model
         self._reasoning_effort = reasoning_effort
         self._notify = notify
+        # Groq's free plan: 30 requests and about 8,000 tokens a minute, 1,000 requests a day. Stay a little under.
+        self._request_limiter = RateLimiter(28, 60.0, "request")
+        self._token_limiter = RateLimiter(7000, 60.0, "token")
+        self._usage = UsageCounter(1000, "AI requests")
 
     def _payload(self, question: str, image_jpeg: bytes | None) -> dict:
         text = build_user_text(question, image_jpeg is not None)
@@ -112,10 +122,19 @@ class GroqVisionProvider(LlmProvider):
         payload = self._payload(question, image_jpeg)
         headers = {"Authorization": f"Bearer {self._api_key}"}
         attempt = 0
+        tokens = TEXT_TOKEN_COST + (IMAGE_TOKEN_COST if image_jpeg is not None else 0)  # a rough estimate
 
         while True:
             attempt += 1
             status, retry_after, detail = 0, "", ""
+            try:  # stay inside the free per-minute request and token limits
+                self._request_limiter.acquire(1, notify=self._notify)
+                self._token_limiter.acquire(tokens, notify=self._notify)
+            except LimitReached as err:
+                raise LlmRateLimitError(
+                    f"To stay inside Groq's free limit I'd have to wait about {err.wait_seconds:.0f} seconds. "
+                    "Please wait a moment and ask again."
+                ) from None
             try:
                 with httpx.stream(
                     "POST", API_URL, headers=headers, json=payload,
@@ -123,6 +142,9 @@ class GroqVisionProvider(LlmProvider):
                 ) as response:
                     status = response.status_code
                     if status == 200:
+                        note = self._usage.record()
+                        if note:
+                            self._notify(note)
                         yield from self._read_stream(response)
                         return
                     retry_after = response.headers.get("retry-after", "")

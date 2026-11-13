@@ -1,0 +1,3 @@
+# The commit hook runs under Git's own shell, which breaks on Windows-style line endings.
+.githooks/* text eol=lf
+*.sh text eol=lf

@@ -103,6 +103,46 @@ class HotkeyTests(unittest.TestCase):
         self.assertEqual(self.run_keys("ctrl+alt_l", ["alt_l"]), [])
         self.assertEqual(self.run_keys("ctrl+alt_l", ["ctrl_l"]), [])
 
+    def test_other_keys_are_dropped_unread_and_never_stored(self):
+        from pynput.keyboard import Key, KeyCode
+
+        from trado.hotkey import HoldToTalkHotkey
+
+        hotkey = HoldToTalkHotkey("ctrl+alt_l", lambda: None, lambda: None)
+
+        class Spy(KeyCode):  # records whether anything tried to read which letter was typed
+            reads = 0
+
+            @property
+            def char(self):
+                Spy.reads += 1
+                return "p"
+
+            @char.setter
+            def char(self, value):
+                pass
+
+        spy = Spy(vk=80)
+        Spy.reads = 0  # setting up the spy doesn't count; only reads by the hotkey code do
+        for key in (spy, KeyCode.from_char("a"), Key.space, Key.enter, Key.shift):
+            hotkey._press(key)
+            hotkey._release(key)
+        self.assertEqual(hotkey._down, set())  # nothing about other keys was kept
+        self.assertEqual(Spy.reads, 0)  # the typed letter was never even looked at
+
+    def test_letter_hotkeys_still_work(self):
+        from pynput.keyboard import KeyCode
+
+        from trado.hotkey import HoldToTalkHotkey
+
+        events = []
+        hotkey = HoldToTalkHotkey("ctrl+x", lambda: events.append("start"), lambda: events.append("stop"))
+        from pynput.keyboard import Key
+
+        hotkey._press(Key.ctrl_l)
+        hotkey._press(KeyCode.from_char("X"))
+        self.assertEqual(events, ["start"])
+
     def test_plain_ctrl_alt_accepts_either_alt(self):
         self.assertEqual(self.run_keys("ctrl+alt", ["ctrl_l", "alt_r"]), ["start"])
 

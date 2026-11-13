@@ -62,8 +62,10 @@ Every setting is explained in `.env.example`.
 ## Limits and privacy
 - **Your voice and a screenshot leave your computer.** They are sent to Groq to be transcribed and
   answered. Trado keeps audio and screenshots **in memory only and never saves them to disk**, but
-  Groq's own terms apply. Close anything private first, and never say or show PAN, Aadhaar, passwords,
-  OTPs or bank details. Set `TRADO_SEND_SCREEN=false` to stop sending screenshots.
+  **Groq's free plan may store this data or use it to improve its services** (check Groq's current terms).
+  Groq offers a "Zero Data Retention" data control in its console, which is worth switching on. Close anything
+  private first, and never say or show PAN, Aadhaar, passwords, OTPs or bank details. Set
+  `TRADO_SEND_SCREEN=false` to stop sending screenshots.
 - **Trado never acts for you.** It will not click, type or submit anything.
 - **Private pages.** If the window in front looks like a login, KYC, bank or broker page, Trado shows a
   Yes/No box before sending a screenshot (default answer: No). It only reads the front window's title, so it
@@ -71,6 +73,11 @@ Every setting is explained in `.env.example`.
 - **Private details are hidden before the AI sees them.** Things that look like a PAN, Aadhaar or card number,
   phone number, email or UPI ID, OTP or password are replaced with "[hidden ...]" in your question and in the
   AI's answer. Your voice clip is uploaded before this happens, so still don't say private details aloud.
+- **What stays on your screen.** Your questions and Trado's answers are printed in the terminal window. Trado doesn't
+  save them, but your terminal's scroll-back (or PowerShell transcription, if you turned it on) may keep them.
+  Close the window when you are done with a private session.
+- **Keys are protected.** Your key is never printed. Messages that come from outside (AI answers, server errors) are
+  cleaned of terminal control codes and anything that looks like a key before they are shown.
 - **It can be wrong.** Speech recognition and AI answers make mistakes, and Trado has no live market data.
 - **Free-tier limits and changes.** Free AI models get retired and limits change. Model names are set in
   `.env` so you can update them. If something stops working, check `.env.example` and Groq's model list.

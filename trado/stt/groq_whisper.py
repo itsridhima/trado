@@ -4,6 +4,7 @@ import time
 
 import httpx
 
+from trado.limits import LimitReached, RateLimiter, UsageCounter
 from trado.stt.base import RateLimitError, SpeechToTextProvider, SttError, UnclearSpeechError
 
 API_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
@@ -31,6 +32,9 @@ class GroqWhisperProvider(SpeechToTextProvider):
         self._model = model
         self._language = language
         self.last_confidence: float | None = None  # shown by TRADO_DEBUG=true
+        # Groq's free plan allows 20 speech requests a minute and 2,000 a day; stay a little under.
+        self._limiter = RateLimiter(18, 60.0, "speech")
+        self._usage = UsageCounter(2000, "speech requests")
 
     def transcribe(self, wav_bytes: bytes) -> str:
         data = {
@@ -43,6 +47,13 @@ class GroqWhisperProvider(SpeechToTextProvider):
             data["language"] = self._language
 
         for attempt in range(1, MAX_ATTEMPTS + 1):
+            try:
+                self._limiter.acquire(1, notify=print)  # stay inside the free per-minute limit
+            except LimitReached as err:
+                raise RateLimitError(
+                    f"To stay inside Groq's free limit I'd have to wait about {err.wait_seconds:.0f} seconds. "
+                    "Please wait a moment and ask again."
+                ) from None
             try:
                 response = httpx.post(
                     API_URL,
@@ -58,6 +69,9 @@ class GroqWhisperProvider(SpeechToTextProvider):
 
             status = response.status_code
             if status == 200:
+                note = self._usage.record()
+                if note:
+                    print(note)
                 return self._judge(response.json())
 
             if status == 429:

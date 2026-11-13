@@ -1,9 +1,11 @@
-# Trado - Slice 1 (push-to-talk speech-to-text)
-httpx>=0.27          # talks to the Groq API
-python-dotenv>=1.0   # loads keys from your local .env file
-sounddevice>=0.4.7   # records from the microphone
-numpy>=1.26          # holds the audio samples
-pynput>=1.7.7        # global hold-to-talk hotkey
-mss>=9.0.1           # screenshots (kept in memory only)
-pillow>=10.3         # shrinks the screenshot before sending
-comtypes>=1.4         # talks to the built-in Windows voice
+# Trado: exact versions that were tested together (Python 3.11 or newer, Windows).
+# Pinned on purpose: a surprise upgrade of a library can't change how Trado behaves.
+# To update on purpose: change a number, run `python -m unittest discover tests`, then run Trado.
+httpx==0.28.1            # talks to the Groq API
+python-dotenv==1.2.4     # loads your key from the settings file
+sounddevice==0.5.6       # records from the microphone
+numpy==2.5.4             # holds the audio samples
+pynput==1.8.2            # global hold-to-talk hotkey
+mss==10.2.0              # screenshots (kept in memory only)
+pillow==13.0.0           # shrinks the screenshot before sending
+comtypes==1.5.0          # talks to the built-in Windows voice

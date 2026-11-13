@@ -1,5 +1,9 @@
-# Secrets - never commit
+# Secrets and settings files: never commit
 .env
+.env.*
+!.env.example
+*.pem
+*.key
 
 # Python
 venv/
@@ -7,17 +11,27 @@ venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+*.egg-info/
+build/
+dist/
 
-# Audio - Trado must never store recordings in git
+# Private data: Trado never saves these by default, and git must never see them if you turn it on
 recordings/
+screenshots/
+transcripts/
+logs/
+*.log
 *.wav
 *.mp3
 *.flac
 
-# Editors / OS
+# Editors and operating system leftovers
 .vscode/
 .idea/
 Thumbs.db
+Desktop.ini
+.DS_Store
+~$*
 
 # Optional reports written by the guardrail runner
 report*.md

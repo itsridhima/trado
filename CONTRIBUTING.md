@@ -16,6 +16,10 @@ python -m venv venv
 pip install -r requirements.txt
 python -m unittest discover tests
 ```
+Turn on the commit check once per copy of the project, so a secret can't be committed by accident:
+```powershell
+git config core.hooksPath .githooks
+```
 If you change the system prompt or anything that affects answers, also run `python -m tools.run_guardrails`
 (needs your own free Groq key) and make sure nothing FAILs.
 

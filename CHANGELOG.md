@@ -5,6 +5,10 @@
 - Private-looking details (PAN, Aadhaar, card, phone, email/UPI, OTP, password) are hidden before the AI sees them and in its answers.
 - A Yes/No box appears before a screenshot of a login, KYC, bank or broker page is sent.
 - Stronger protection against instructions hidden in screenshots, plus `python -m tools.run_injection` to test it.
+- Low security findings fixed: terminal control codes and key-like text are cleaned from untrusted messages, the settings
+  object hides the key, the hotkey ignores unrelated keys, client-side rate limits and daily-limit warnings, pinned
+  dependency versions, a commit-time secret check (`git config core.hooksPath .githooks`), a tighter `.gitignore`,
+  and clearer privacy wording.
 - New helper commands: `python -m trado --where` (which settings file is used) and `--set NAME=value` (change a setting safely).
 - The default hotkey is now Ctrl + Left Alt (it was F9 in v0.1). Set `TRADO_HOTKEY=f9` to go back.
 

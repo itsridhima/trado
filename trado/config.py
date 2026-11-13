@@ -1,7 +1,7 @@
 """Settings, read from environment variables (and a local .env file)."""
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import dotenv_values, load_dotenv
@@ -80,7 +80,7 @@ def is_synced_path(path: Path) -> bool:
 
 @dataclass(frozen=True)
 class Settings:
-    groq_api_key: str
+    groq_api_key: str = field(repr=False)  # repr=False: printing or logging the settings never shows the key
     hotkey: str
     stt_provider: str
     stt_language: str  # "" means auto-detect
