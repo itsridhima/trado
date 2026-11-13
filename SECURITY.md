@@ -23,7 +23,8 @@ Voice and screenshots are sent to Groq using your own key; see the README's priv
 **Status: the four Medium findings (F1, F2, F3, F12) are fixed in the code and pass offline tests. The owner
 reports having rotated the key and run the live checks (the Yes/No box, hidden PAN, injection test); this review
 did not independently watch those runs. The Low findings now also have fixes (see "Low findings: fixes applied"),
-except that F9 (vulnerability scan) and the optional scanner in F10 still wait for permission to install tools.**
+except that the optional extra scanner in F10 is not installed. The F9 vulnerability scan (`pip-audit`) has been run:
+see the F9 row and "Dependency scan result".**
 Method: read all of the code, ran searches over the code and the full git history, and ran a few small
 experiments. No scanner tool was installed for this review (see "Could not verify").
 
@@ -108,11 +109,26 @@ No **High** findings. The Medium ones matter most before a public release.
 | F6 | Server error text is cleaned of control codes and key-like strings, and every provider error message is cleaned again before it is shown. | |
 | F7 | Client-side limits: speech 18 per minute; AI 28 requests and about 7,000 estimated tokens per minute (just under Groq's free limits). Trado waits up to 25 seconds, then asks you to retry. A warning appears at 80% of the daily limit, counted only while Trado is open. Retries stay capped at 3. | A question you interrupt still finishes its speech upload; a request already sent can't be recalled. Token counts are estimates. |
 | F8 | The hotkey code drops every key that is not part of the hotkey before reading it, so other keystrokes are never stored. | Windows still hands the program every keystroke; any global hotkey tool works this way. |
-| F9 | `requirements.txt` pins exact versions, matching what was tested. | `pip-audit` (vulnerability scan) and updating `pip` need permission to install tools. Not yet run. |
+| F9 | `requirements.txt` pins exact versions, matching what was tested. `pip-audit` was run (see "Dependency scan result"). | pip was upgraded to 26.3 and the re-scan was clean. Repeat the scan before each release: it can only find known problems. |
 | F10 | `tools/check_secrets.py` plus `.githooks/pre-commit` block commits containing API keys or tokens, personal email addresses, `.env`, key and audio files, or words from a private local list (kept inside `.git`, never pushed). Turn it on once with `git config core.hooksPath .githooks`. GitHub's secret scanning and push protection are also on. | A dedicated scanner (detect-secrets or gitleaks) would catch more key formats; not installed yet. |
 | F11 | Removed the unused Gemini line from `.env.example`. `.gitignore` now also covers other `.env` files, key files, logs, screenshots, transcripts, build folders and OS leftovers. | |
 | F13 | README now explains that terminal scroll-back or PowerShell transcription may keep what is printed. | |
 | F14 | The start-up text and README now say plainly that Groq's free plan may store data or use it to improve its services, and suggest Groq's Zero Data Retention setting. | |
+
+## Dependency scan result
+Tool: `pip-audit` 2.10.1, run in a separate scratch environment on 2026-11-13. It sends only library names and
+versions to public vulnerability databases.
+
+- **The 8 libraries Trado uses (as pinned in `requirements.txt`): no known vulnerabilities.**
+- **The 9 libraries they pull in** (anyio, certifi, cffi, h11, httpcore, idna, pycparser, six, typing-extensions): **no known vulnerabilities.**
+- **`pip` 25.0.1 (the installer tool) had 6 distinct known advisories** (12 lines in the first report, because some are
+  listed twice), fixed in pip 26.2 or newer. They concern what pip does while *installing* packages (for example from a
+  malicious package index or a crafted download). Trado does not run pip when it runs, so the practical risk was low.
+- **Fixed:** pip was upgraded to 26.3. A second scan of the whole environment (18 packages) then reported
+  **no known vulnerabilities**, and all tests still passed.
+
+To repeat the scan, install `pip-audit` in a separate environment (not Trado's) and run
+`pip-audit --path <Trado environment>\Lib\site-packages`. Results change over time, so repeat it before each release.
 
 Known limits of these fixes: the page check reads only the title of the front window; redaction is pattern
 based and can miss or over-hide; the AI may still be fooled by a cleverly worded page.
@@ -123,7 +139,8 @@ markup inside text (for example a silence command) is spoken as plain words, not
 ## Could not verify
 - Whether OneDrive has already uploaded `.env` (check on the OneDrive website or app).
 - Free-tier data retention and training policies of Groq (public documentation is unclear and may change).
-- Known vulnerabilities in dependencies (no scanner installed yet).
+- Vulnerabilities that are not yet in public databases (a scan can only find known ones), and vulnerabilities that
+  appear in the libraries after the scan date.
 - Behaviour on other PCs, other Windows versions or other voices.
 - Whether the AI model reliably ignores injected screen text (not yet tested).
 - Whether a secret exists that a simple pattern search cannot recognise.

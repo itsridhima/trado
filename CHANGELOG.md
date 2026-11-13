@@ -9,6 +9,7 @@
   object hides the key, the hotkey ignores unrelated keys, client-side rate limits and daily-limit warnings, pinned
   dependency versions, a commit-time secret check (`git config core.hooksPath .githooks`), a tighter `.gitignore`,
   and clearer privacy wording.
+- Libraries scanned with `pip-audit` on 2026-11-13: no known vulnerabilities (after upgrading pip to 26.3). See SECURITY.md.
 - New helper commands: `python -m trado --where` (which settings file is used) and `--set NAME=value` (change a setting safely).
 - The default hotkey is now Ctrl + Left Alt (it was F9 in v0.1). Set `TRADO_HOTKEY=f9` to go back.
 
