@@ -10,7 +10,8 @@ out loud in simple words.
 > For personal decisions, talk to a SEBI-registered investment adviser. Trado can be wrong, so check
 > facts with official sources. See [PRODUCT_RULES.md](PRODUCT_RULES.md).
 
-**Status: early preview (v0.1).** It works, but it is for people comfortable running a Python program.
+**Status: early preview (v0.2).** It works, but it is for people comfortable running a Python program.
+Project page: <https://itsridhima.github.io/trado/>
 There is no installer yet.
 
 ## What it does today

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trado: a voice buddy that teaches trading and investing</title>
+<meta name="description" content="Trado is a free, open-source Windows voice buddy that looks at your screen and explains trading and investing in simple words. Educational only, never an adviser.">
+<style>
+  :root {
+    --bg: #f7f8fa; --card: #ffffff; --text: #1b2430; --muted: #526072; --line: #dfe4ea;
+    --brand: #1d4ed8; --brand-text: #ffffff; --warn-bg: #fff4e0; --warn-line: #e0a64a; --code: #eef1f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f141b; --card: #171e28; --text: #e8edf3; --muted: #a2afbf; --line: #2a3442;
+      --brand: #6b9bff; --brand-text: #0b1220; --warn-bg: #2b2210; --warn-line: #b8862f; --code: #0c1118;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 16px 56px; }
+  header { padding: 48px 0 24px; }
+  h1 { font-size: clamp(1.9rem, 5vw, 2.6rem); line-height: 1.15; margin: 0 0 12px; }
+  h2 { font-size: 1.3rem; margin: 0 0 10px; }
+  p { margin: 0 0 12px; }
+  .lead { font-size: 1.12rem; color: var(--muted); }
+  .badge { display: inline-block; font-size: .8rem; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); margin-bottom: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin: 16px 0; }
+  .warn { background: var(--warn-bg); border-color: var(--warn-line); }
+  .buttons { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+  a.btn { display: inline-block; padding: 12px 20px; border-radius: 10px; font-weight: 600; text-decoration: none; border: 1px solid var(--brand); }
+  a.primary { background: var(--brand); color: var(--brand-text); }
+  a.secondary { color: var(--brand); }
+  a { color: var(--brand); }
+  a:focus-visible, button:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+  ol, ul { padding-left: 22px; margin: 0 0 8px; }
+  li { margin-bottom: 6px; }
+  pre { background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; margin: 8px 0 12px; font: .9rem/1.5 ui-monospace, Consolas, monospace; }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: .92em; }
+  footer { color: var(--muted); font-size: .9rem; border-top: 1px solid var(--line); padding-top: 18px; margin-top: 28px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="badge">Early preview &middot; free &middot; open source &middot; Windows</span>
+    <h1>Trado: a voice buddy that teaches trading and investing</h1>
+    <p class="lead">Hold a hotkey, ask a question out loud, and Trado looks at your screen and answers out loud in simple words. Made with an India focus.</p>
+    <div class="buttons">
+      <a class="btn primary" href="https://github.com/itsridhima/trado/releases/latest">Download the latest release</a>
+      <a class="btn secondary" href="https://github.com/itsridhima/trado">See the code on GitHub</a>
+    </div>
+  </header>
+
+  <section class="card warn" aria-labelledby="disc">
+    <h2 id="disc">Educational only. Not financial advice.</h2>
+    <p>Trado explains ideas. It will <strong>not</strong> tell you what to buy or sell, give price targets or predictions, or plan your money, and it will never click or type anything for you. It is not a SEBI-registered investment adviser and is not linked to SEBI, NSE, BSE or any broker. It can be wrong, so check facts with official sources. For personal decisions, talk to a SEBI-registered investment adviser.</p>
+  </section>
+
+  <section class="card" aria-labelledby="how">
+    <h2 id="how">How it works</h2>
+    <ol>
+      <li>Hold <strong>Ctrl + Left Alt</strong> and speak (you hear a short beep when the mic is ready).</li>
+      <li>Your words are turned into text.</li>
+      <li>Trado looks at the screen under your mouse, and asks a vision AI about it.</li>
+      <li>You read the answer and hear it spoken. Press the hotkey again any time to interrupt.</li>
+    </ol>
+    <p>Not built yet: conversation memory, the glowing pointing cursor, a trading knowledge base and a one-click installer.</p>
+  </section>
+
+  <section class="card" aria-labelledby="need">
+    <h2 id="need">What you need</h2>
+    <ul>
+      <li>Windows 10 or 11, a microphone and an internet connection</li>
+      <li><a href="https://www.python.org/downloads/">Python 3.11 or newer</a> (tick "Add python.exe to PATH" when installing)</li>
+      <li>A <strong>free</strong> <a href="https://console.groq.com/keys">Groq API key</a>. The free plan allows only a few questions per minute.</li>
+    </ul>
+    <p>Trado is a program that runs on your own PC, so it cannot run inside this web page. It needs your microphone, your screen and a hotkey.</p>
+  </section>
+
+  <section class="card" aria-labelledby="setup">
+    <h2 id="setup">Set it up (Windows PowerShell)</h2>
+<pre><code>git clone https://github.com/itsridhima/trado.git
+cd trado
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python -m trado --setup     # paste your Groq key; the screen stays hidden
+python -m trado</code></pre>
+    <p>Prefer no Git? Download the source zip from the <a href="https://github.com/itsridhima/trado/releases/latest">releases page</a>, unzip it, and start at the <code>python -m venv venv</code> line.</p>
+    <p>Full instructions and every setting are in the <a href="https://github.com/itsridhima/trado#readme">README</a>.</p>
+  </section>
+
+  <section class="card" aria-labelledby="privacy">
+    <h2 id="privacy">Privacy and limits</h2>
+    <ul>
+      <li><strong>Your voice and a screenshot leave your computer.</strong> They go to Groq, using your own key. Trado keeps audio and screenshots in memory only and never saves them. Groq's own terms apply, and its free plan may store data, so don't say or show private details.</li>
+      <li>Before sending a screenshot of a login, KYC, bank or broker page, Trado asks you first (default answer: No). It only reads the title of the front window, so it can miss things.</li>
+      <li>Things that look like a PAN, Aadhaar, card number, phone number, OTP or password are hidden before the AI sees your question. Your voice clip is uploaded first, so still don't say them aloud.</li>
+      <li>No analytics and no tracking. Trado sends nothing anywhere except to Groq.</li>
+      <li>English only for now, with a built-in Windows voice that sounds robotic.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>Trado is free and open source under the <a href="https://github.com/itsridhima/trado/blob/main/LICENSE">MIT License</a>. It is inspired by <a href="https://github.com/farzaa/clicky">Clicky</a> by Farza (MIT). It is an independent Windows project that uses the idea, not the code, and is not affiliated with Clicky. Found a security or privacy problem? Please read <a href="https://github.com/itsridhima/trado/blob/main/SECURITY.md">SECURITY.md</a>.</p>
+  </footer>
+</div>
+</body>
+</html>

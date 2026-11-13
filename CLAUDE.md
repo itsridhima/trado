@@ -34,10 +34,10 @@ Trado is a voice-only AI buddy for Windows that teaches trading and investing
 - `trado/` code; `trado/stt/` speech-to-text, `trado/llm/` AI answers, `trado/tts/` voice out (each swappable)
 - `trado/guardrails.py` rule checks; `tools/` helper scripts (guardrail runner)
 - `tests/` tests and `guardrail_questions.md`
-- `docs/` notes
+- `docs/` the project web page (`docs/index.html`, served by GitHub Pages)
 
 ## Current status
-Round 1 (basic Trado, v0.1) is built and tested by the user:
+Round 1 (basic Trado) plus security hardening (v0.2, see SECURITY.md) is built and tested by the user:
 hold hotkey -> record mic -> Whisper large-v3 (Groq) -> screenshot of the screen under the mouse ->
 streamed vision-AI answer (Groq qwen/qwen3.8-27b) -> spoken sentence by sentence (Windows voice).
 Pressing the hotkey again interrupts. `python -m tools.run_guardrails` checks answers against the product rules.
