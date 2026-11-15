@@ -6,7 +6,7 @@ from unittest import mock
 import httpx
 
 from tests.test_groq_vision import FakeStream, sse
-from trado.limits import LimitReached, RateLimiter, UsageCounter
+from trado.limits import Cancelled, LimitReached, RateLimiter, UsageCounter
 from trado.llm.base import LlmRateLimitError
 from trado.llm.groq_vision import GroqVisionProvider
 from trado.stt.base import RateLimitError
@@ -41,6 +41,29 @@ class RateLimiterTests(unittest.TestCase):
         self.assertAlmostEqual(waited, 60.0, delta=1.0)
         self.assertEqual(len(told), 1)  # told once, in plain words
         self.assertIn("free test limit", told[0])
+
+    def test_a_wait_of_a_second_or_so_is_silent(self):
+        clock, told = FakeClock(), []
+        lim = limiter(1, clock)
+        lim.acquire(notify=told.append)
+        clock.now += 59.2  # only about a second short of the window
+        lim.acquire(notify=told.append)
+        self.assertEqual(told, [])  # no "waiting about 0 seconds" message
+        self.assertGreater(sum(clock.slept), 0.5)  # but it still waited
+
+    def test_a_wait_can_be_cancelled_and_stops_within_a_fraction_of_a_second(self):
+        clock = FakeClock()
+        lim = limiter(1, clock, max_wait=120)
+        lim.acquire()
+        checks = {"n": 0}
+
+        def cancelled():
+            checks["n"] += 1
+            return checks["n"] > 3  # gives up shortly after the wait begins
+
+        with self.assertRaises(Cancelled):
+            lim.acquire(notify=lambda _m: None, cancelled=cancelled)
+        self.assertLess(sum(clock.slept), 2.0)  # it did not sit out the whole minute
 
     def test_gives_up_instead_of_waiting_too_long(self):
         clock = FakeClock()
@@ -90,6 +113,34 @@ class ProviderIntegrationTests(unittest.TestCase):
         with self.assertRaises(LlmRateLimitError):
             list(provider.stream_answer("q", b"jpg"))
         self.assertEqual(stream.call_count, 1)  # the second question never reached Groq
+
+    def test_the_ai_provider_is_willing_to_wait_up_to_a_minute(self):
+        provider = GroqVisionProvider("test-key", notify=lambda _m: None)
+        self.assertEqual(provider._token_limiter.max_wait, 60.0)
+        self.assertEqual(provider._request_limiter.max_wait, 60.0)
+
+    @mock.patch("trado.llm.groq_vision.httpx.stream")
+    def test_a_question_given_up_on_sends_nothing(self, stream):
+        stream.side_effect = lambda *a, **k: FakeStream(lines=sse("ok"))
+        provider = GroqVisionProvider("test-key", notify=lambda _m: None)
+        self.assertEqual("".join(provider.stream_answer("q", None, None, lambda: True)), "")  # cancelled from the start
+        self.assertEqual(stream.call_count, 0)
+
+    @mock.patch("trado.llm.groq_vision.httpx.stream")
+    def test_giving_up_during_a_long_wait_sends_nothing(self, stream):
+        stream.side_effect = lambda *a, **k: FakeStream(lines=sse("ok"))
+        clock = FakeClock()
+        provider = GroqVisionProvider("test-key", notify=lambda _m: None)
+        provider._token_limiter = limiter(100, clock, max_wait=120)
+        list(provider.stream_answer("q", b"jpg"))  # uses up the budget
+        asked = {"n": 0}
+
+        def cancelled():
+            asked["n"] += 1
+            return asked["n"] > 4
+
+        self.assertEqual("".join(provider.stream_answer("q", b"jpg", None, cancelled)), "")
+        self.assertEqual(stream.call_count, 1)  # the second request was never sent
 
     @mock.patch("trado.stt.groq_whisper.httpx.post")
     def test_speech_provider_refuses_locally_too(self, post):

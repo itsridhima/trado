@@ -1,7 +1,7 @@
 """The AI-answer interface. Any provider (Groq, Gemini, ...) implements this so it can be swapped."""
 
 from abc import ABC, abstractmethod
-from typing import Iterator
+from typing import Callable, Iterator
 
 
 class LlmError(Exception):
@@ -14,5 +14,15 @@ class LlmRateLimitError(LlmError):
 
 class LlmProvider(ABC):
     @abstractmethod
-    def stream_answer(self, question: str, image_jpeg: bytes | None = None) -> Iterator[str]:
-        """Yield the answer in small pieces as it arrives. Raise LlmError on failure."""
+    def stream_answer(
+        self,
+        question: str,
+        image_jpeg: bytes | None = None,
+        history: list[dict] | None = None,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> Iterator[str]:
+        """Yield the answer in small pieces as it arrives. Raise LlmError on failure.
+
+        `history` is earlier turns as [{"role": "user"|"assistant", "content": text}, ...], oldest first.
+        Only the current question carries a screenshot. If `cancelled()` becomes true before the request is sent
+        (for example while waiting for the free limit), stop quietly without sending it."""

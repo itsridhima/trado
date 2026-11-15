@@ -41,6 +41,7 @@ Round 1 (basic Trado) plus security hardening (v0.2, see SECURITY.md) is built a
 hold hotkey -> record mic -> Whisper large-v3 (Groq) -> screenshot of the screen under the mouse ->
 streamed vision-AI answer (Groq qwen/qwen3.8-27b) -> spoken sentence by sentence (Windows voice).
 Pressing the hotkey again interrupts. `python -m tools.run_guardrails` checks answers against the product rules.
-Not built yet (Round 2+): memory, pointing and overlay, trading knowledge notes, tray/privacy, first-run setup, installer.
+Round 2 so far: short memory (last 5 exchanges, text only, in memory only; "forget that" clears it) is built and tested.
+Not built yet (rest of Round 2+): pointing and overlay, trading knowledge notes, tray/privacy, first-run setup, installer.
 Plan: build in rounds (basic -> add a few things -> refine); the user tests after each round.
 Free tiers change: Llama 4 Scout was retired in July 2026, so keep model names configurable in `.env`.

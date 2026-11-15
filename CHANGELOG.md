@@ -1,6 +1,16 @@
 # Changelog
 
-## Unreleased: security hardening (see SECURITY.md)
+## Unreleased
+### Round 2, step 1: short memory
+- Trado remembers your last 5 questions and answers (text only, in memory only) so follow-ups like "and what does that mean?"
+  work. Say "forget that" to clear it; `TRADO_MEMORY=0` turns it off. See the privacy notes in README.md and SECURITY.md.
+- New end-to-end tests that run the real app flow with a fake microphone, AI and voice.
+- When the free limit is full, Trado now waits up to a minute and says so, instead of refusing; pressing the hotkey cancels
+  the wait and nothing is sent.
+- "I didn't catch that" replies are no longer remembered, and asking about a cleared conversation now gets a clear answer.
+- Waits shorter than 2 seconds are silent (no more "waiting about 0 seconds").
+
+### Security hardening (see SECURITY.md)
 - Key file now lives in a private local folder first (`python -m trado --setup`), with a warning if it is in a synced folder.
 - Private-looking details (PAN, Aadhaar, card, phone, email/UPI, OTP, password) are hidden before the AI sees them and in its answers.
 - A Yes/No box appears before a screenshot of a login, KYC, bank or broker page is sent.

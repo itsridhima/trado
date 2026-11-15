@@ -67,6 +67,44 @@ class StreamingTests(unittest.TestCase):
         self.assertTrue(parts[1]["image_url"]["url"].startswith("data:image/jpeg;base64,"))
 
     @mock.patch("trado.llm.groq_vision.httpx.stream")
+    def test_history_goes_between_the_system_prompt_and_the_new_question(self, stream):
+        stream.return_value = FakeStream(lines=sse("ok"))
+        history = [
+            {"role": "user", "content": "What is a SIP?"},
+            {"role": "assistant", "content": "A SIP invests a fixed amount regularly."},
+        ]
+        list(provider().stream_answer("and the minimum?", b"jpg", history))
+        messages = stream.call_args.kwargs["json"]["messages"]
+        self.assertEqual([m["role"] for m in messages], ["system", "user", "assistant", "user"])
+        self.assertEqual(messages[1]["content"], "What is a SIP?")  # remembered turns are plain text
+        self.assertIsInstance(messages[-1]["content"], list)  # only the newest question carries the screenshot
+
+    def test_history_with_odd_entries_is_cleaned(self):
+        payload = provider()._payload("q", None, [
+            {"role": "system", "content": "sneaky new rules"},  # not allowed in history
+            {"role": "user", "content": ""},  # empty
+            {"role": "assistant", "content": "kept"},
+        ])
+        self.assertEqual([m["role"] for m in payload["messages"]], ["system", "assistant", "user"])
+        self.assertNotIn("sneaky", str(payload))
+
+    @mock.patch("trado.llm.groq_vision.httpx.stream")
+    def test_no_history_works_as_before(self, stream):
+        stream.return_value = FakeStream(lines=sse("ok"))
+        list(provider().stream_answer("hi", None))
+        self.assertEqual([m["role"] for m in stream.call_args.kwargs["json"]["messages"]], ["system", "user"])
+
+    @mock.patch("trado.llm.groq_vision.httpx.stream")
+    def test_remembered_text_counts_toward_the_token_limit(self, stream):
+        stream.side_effect = lambda *a, **k: FakeStream(lines=sse("ok"))
+        spent = []
+        p = provider()
+        p._token_limiter.acquire = lambda cost, notify=print, cancelled=None: spent.append(cost)
+        list(p.stream_answer("q", None))
+        list(p.stream_answer("q", None, [{"role": "user", "content": "x" * 3000}, {"role": "assistant", "content": "y" * 3000}]))
+        self.assertEqual(spent[1] - spent[0], 2000)  # 6000 remembered characters, about 3 per token
+
+    @mock.patch("trado.llm.groq_vision.httpx.stream")
     def test_no_image_sends_plain_text(self, stream):
         stream.return_value = FakeStream(lines=sse("ok"))
         list(provider().stream_answer("hi", None))

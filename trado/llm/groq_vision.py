@@ -7,7 +7,7 @@ from typing import Callable, Iterator
 
 import httpx
 
-from trado.limits import LimitReached, RateLimiter, UsageCounter
+from trado.limits import Cancelled, LimitReached, RateLimiter, UsageCounter
 from trado.llm.base import LlmError, LlmProvider, LlmRateLimitError
 from trado.prompts import SYSTEM_PROMPT, build_user_text
 from trado.textsafe import sanitize_message
@@ -90,12 +90,18 @@ class GroqVisionProvider(LlmProvider):
         self._reasoning_effort = reasoning_effort
         self._notify = notify
         # Groq's free plan: 30 requests and about 8,000 tokens a minute, 1,000 requests a day. Stay a little under.
-        self._request_limiter = RateLimiter(28, 60.0, "request")
-        self._token_limiter = RateLimiter(7000, 60.0, "token")
+        # A wait of up to a minute is allowed (it is announced, and pressing the hotkey cancels it).
+        self._request_limiter = RateLimiter(28, 60.0, "request", max_wait=60.0)
+        self._token_limiter = RateLimiter(7000, 60.0, "token", max_wait=60.0)
         self._usage = UsageCounter(1000, "AI requests")
 
-    def _payload(self, question: str, image_jpeg: bytes | None) -> dict:
+    def _payload(self, question: str, image_jpeg: bytes | None, history: list[dict] | None = None) -> dict:
         text = build_user_text(question, image_jpeg is not None)
+        earlier = [
+            {"role": m["role"], "content": str(m["content"])}
+            for m in (history or [])
+            if m.get("role") in ("user", "assistant") and m.get("content")
+        ]
         if image_jpeg is None:
             user_content = text
         else:
@@ -108,6 +114,7 @@ class GroqVisionProvider(LlmProvider):
             "model": self._model,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
+                *earlier,  # earlier turns: text only, never screenshots
                 {"role": "user", "content": user_content},
             ],
             "temperature": 0.4,
@@ -118,23 +125,36 @@ class GroqVisionProvider(LlmProvider):
             payload["reasoning_effort"] = self._reasoning_effort
         return payload
 
-    def stream_answer(self, question: str, image_jpeg: bytes | None = None) -> Iterator[str]:
-        payload = self._payload(question, image_jpeg)
+    def stream_answer(
+        self,
+        question: str,
+        image_jpeg: bytes | None = None,
+        history: list[dict] | None = None,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> Iterator[str]:
+        payload = self._payload(question, image_jpeg, history)
         headers = {"Authorization": f"Bearer {self._api_key}"}
         attempt = 0
-        tokens = TEXT_TOKEN_COST + (IMAGE_TOKEN_COST if image_jpeg is not None else 0)  # a rough estimate
+        remembered_chars = sum(len(m["content"]) for m in payload["messages"][1:-1])  # earlier turns
+        tokens = (  # a rough estimate for the free per-minute limit: about 3 characters per token
+            TEXT_TOKEN_COST + (IMAGE_TOKEN_COST if image_jpeg is not None else 0) + remembered_chars // 3
+        )
 
         while True:
             attempt += 1
             status, retry_after, detail = 0, "", ""
-            try:  # stay inside the free per-minute request and token limits
-                self._request_limiter.acquire(1, notify=self._notify)
-                self._token_limiter.acquire(tokens, notify=self._notify)
+            try:  # stay inside the free per-minute request and token limits (waits can be cancelled)
+                self._request_limiter.acquire(1, notify=self._notify, cancelled=cancelled)
+                self._token_limiter.acquire(tokens, notify=self._notify, cancelled=cancelled)
+            except Cancelled:
+                return  # you gave up on this question while it waited: send nothing
             except LimitReached as err:
                 raise LlmRateLimitError(
                     f"To stay inside Groq's free limit I'd have to wait about {err.wait_seconds:.0f} seconds. "
                     "Please wait a moment and ask again."
                 ) from None
+            if cancelled and cancelled():
+                return
             try:
                 with httpx.stream(
                     "POST", API_URL, headers=headers, json=payload,

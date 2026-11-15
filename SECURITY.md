@@ -38,7 +38,7 @@ No code runs shell commands (`eval`, `exec`, `pickle`, `subprocess`, `os.system`
 | Sent to | What | When |
 |---|---|---|
 | Groq (speech-to-text) | Your recorded voice (WAV, in memory) and a short vocabulary hint | Every question |
-| Groq (AI answer) | The transcript of your question, the system prompt and a JPEG screenshot of the screen under your mouse | Every question (screenshot can be switched off with `TRADO_SEND_SCREEN=false`) |
+| Groq (AI answer) | The transcript of your question, the system prompt, a JPEG screenshot of the screen under your mouse, and the last few remembered questions and answers as text (up to 5, `TRADO_MEMORY=0` turns this off) | Every question (screenshot can be switched off with `TRADO_SEND_SCREEN=false`) |
 | Nobody else | No analytics, no telemetry, no logs uploaded | n/a |
 
 All requests use HTTPS to `api.groq.com`, with certificate checks left at their safe default and with timeouts.
@@ -52,6 +52,9 @@ All requests use HTTPS to `api.groq.com`, with certificate checks left at their 
   `python -m tools.run_guardrails --save <file>`, which the user chooses and git ignores (`report*.md`).
 - **Audio and screenshots:** memory only (`io.BytesIO`), never saved.
 - **Transcripts and answers:** printed to the terminal only; no log file exists.
+- **Remembered turns:** up to 5 recent questions and answers, as text, held in memory only (`trado/memory.py`). They are
+  the on-screen versions (private-looking details already hidden), never include screenshots, are never written to disk,
+  and are cleared on quit or by saying "forget that".
 
 ## Dependencies (8 direct, 18 installed in total)
 httpx (calls Groq), python-dotenv (reads `.env`), sounddevice (microphone), numpy (audio samples),

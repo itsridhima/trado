@@ -20,8 +20,9 @@ There is no installer yet.
 3. It captures the screen under your mouse (in memory only) and asks a vision AI about it.
 4. It shows the answer and **speaks it sentence by sentence** with the built-in Windows voice.
 5. Press the hotkey again at any time to interrupt it.
+6. It remembers your last few questions, so follow-ups like "and what does that mean?" work. Say "forget that" to clear it.
 
-**Not built yet:** conversation memory, the glowing "pointing" cursor, a built-in trading knowledge
+**Not built yet:** the glowing "pointing" cursor, a built-in trading knowledge
 base, a tray icon, a first-run setup screen and an installer. Only English is supported for now.
 
 ## What you need
@@ -67,6 +68,10 @@ Every setting is explained in `.env.example`.
   private first, and never say or show PAN, Aadhaar, passwords, OTPs or bank details. Set
   `TRADO_SEND_SCREEN=false` to stop sending screenshots.
 - **Trado never acts for you.** It will not click, type or submit anything.
+- **Short memory.** Trado remembers your last 5 questions and its answers, as text, while it is open, so follow-ups like
+  "and what does that mean?" work. That text is sent to Groq with each new question. It is never saved to disk, never
+  includes screenshots, and is cleared when you quit or say "forget that". Private-looking details are hidden before they
+  are remembered. Set `TRADO_MEMORY=0` to turn it off.
 - **Private pages.** If the window in front looks like a login, KYC, bank or broker page, Trado shows a
   Yes/No box before sending a screenshot (default answer: No). It only reads the front window's title, so it
   can miss things, and it can't see other windows or notifications on your screen.
@@ -79,6 +84,11 @@ Every setting is explained in `.env.example`.
 - **Keys are protected.** Your key is never printed. Messages that come from outside (AI answers, server errors) are
   cleaned of terminal control codes and anything that looks like a key before they are shown.
 - **It can be wrong.** Speech recognition and AI answers make mistakes, and Trado has no live market data.
+- **Trado can see its own window.** If the terminal where Trado prints is visible, it is part of the screenshot, so the AI
+  can read your recent questions there even after you say "forget that". Move or minimise that window when you want a
+  clean slate.
+- **Waits are normal.** The free plan allows only about two screenshot questions a minute. Trado waits (up to a minute) and
+  says so; press the hotkey again to cancel the wait and nothing is sent.
 - **Free-tier limits and changes.** Free AI models get retired and limits change. Model names are set in
   `.env` so you can update them. If something stops working, check `.env.example` and Groq's model list.
 - **No telemetry.** Trado sends nothing anywhere except to Groq, using your own key.

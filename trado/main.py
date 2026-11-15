@@ -7,6 +7,7 @@ from trado.audio import Recorder, is_too_quiet, list_input_devices
 from trado.config import load_settings
 from trado.hotkey import HoldToTalkHotkey, describe_hotkey
 from trado.llm import LlmError, create_llm_provider
+from trado.memory import ConversationMemory, is_forget_request, is_non_answer
 from trado.privacy import redact_sensitive
 from trado.screen import capture_screen_jpeg, make_dpi_aware
 from trado.sensitive_page import PageGuard
@@ -103,6 +104,7 @@ def main() -> None:
         speaker = NullSpeaker()
 
     page_guard = PageGuard(settings.sensitive_pages)
+    memory = ConversationMemory(settings.memory_exchanges)  # recent questions and answers, text only, never saved
 
     # Each press of the hotkey starts a new "turn". Work belonging to an older turn
     # quietly stops itself, which is how pressing the key interrupts Trado.
@@ -142,6 +144,13 @@ def main() -> None:
                 print("(I hid what looked like private details in your words before asking the AI. Please don't say them aloud.)")
             print(f'You said: "{question}"')
 
+            if memory.max_exchanges and is_forget_request(question):
+                memory.clear()
+                reply = "Okay, I've forgotten our conversation."
+                print(f"Trado: {reply}")
+                speaker.say(reply)
+                return
+
             image = None
             if settings.send_screen:
                 allowed, note = page_guard.check()  # may show a Yes/No box on login, KYC, bank or broker pages
@@ -158,6 +167,7 @@ def main() -> None:
             print("Thinking...")
             started = False
             splitter = SentenceSplitter()
+            shown_parts: list[str] = []  # exactly what you saw and heard, which is what gets remembered
 
             def emit(sentences: list[str]) -> None:
                 """Show and speak finished sentences, after hiding anything that looks like private details."""
@@ -168,12 +178,13 @@ def main() -> None:
                     shown, _ = redact_sensitive(strip_control(sentence))
                     print(("" if started else "Trado: ") + shown + " ", end="", flush=True)
                     started = True
+                    shown_parts.append(shown)
                     spoken = clean_for_speech(shown)
                     if spoken:
                         speaker.say(spoken)
 
             try:
-                for piece in llm.stream_answer(question, image):
+                for piece in llm.stream_answer(question, image, memory.messages(), cancelled=lambda: not is_current(turn)):
                     if not is_current(turn):
                         return  # you pressed the key again: stop quietly
                     emit(splitter.feed(piece))
@@ -183,6 +194,11 @@ def main() -> None:
                 if is_current(turn):
                     message = sanitize_message(str(err))
                     print(f"\nSorry: {message}" if started else f"Sorry: {message}")
+            finally:
+                spoken_answer = " ".join(shown_parts)
+                # An interrupted answer is remembered (you heard that part), but "I didn't catch that" is not.
+                if shown_parts and not is_non_answer(spoken_answer):
+                    memory.add(question, spoken_answer)
         except Exception as err:  # never let one bad request kill the app
             if is_current(turn):
                 print(f"\nUnexpected error ({type(err).__name__}). Please try again.")
@@ -236,6 +252,11 @@ def main() -> None:
         print(f"         Login, KYC, bank and broker pages: Trado {guard_text} (TRADO_SENSITIVE_PAGES=ask|skip|send).")
     else:
         print("Screenshots are OFF (TRADO_SEND_SCREEN=false). Only your question is sent.")
+    if settings.memory_exchanges:
+        print(f"Memory: Trado remembers your last {settings.memory_exchanges} questions while it is open, so follow-ups work.")
+        print("        That text is sent to Groq with each new question. Say \"forget that\" to clear it. Never saved to disk.")
+    else:
+        print("Memory is OFF (TRADO_MEMORY=0): every question is answered on its own.")
     if settings.env_overrides:
         print(f"NOTE: {', '.join(settings.env_overrides)} come(s) from your Windows environment and override your settings file.")
         print("      To use the file instead, remove it from the environment (in PowerShell: Remove-Item Env:NAME).")

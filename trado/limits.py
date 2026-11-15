@@ -18,6 +18,10 @@ class LimitReached(Exception):
         self.wait_seconds = wait_seconds
 
 
+class Cancelled(Exception):
+    """The question was given up on (the hotkey was pressed again) while waiting for the free limit."""
+
+
 class RateLimiter:
     """Allows at most `capacity` units in any `window` seconds; waits (briefly) when full."""
 
@@ -48,11 +52,18 @@ class RateLimiter:
                 return max(0.0, when + self.window - now)
         return self.window
 
-    def acquire(self, cost: float = 1.0, notify: Callable[[str], None] = print) -> float:
-        """Reserve `cost` units, waiting if needed. Returns seconds waited. Raises LimitReached if it'd be too long."""
+    def acquire(
+        self, cost: float = 1.0, notify: Callable[[str], None] = print, cancelled: Callable[[], bool] | None = None
+    ) -> float:
+        """Reserve `cost` units, waiting if needed. Returns seconds waited.
+
+        Raises LimitReached if the wait would be too long, and Cancelled if `cancelled()` becomes true while waiting
+        (for example you pressed the hotkey again), so a question you gave up on doesn't spend your free allowance."""
         cost = min(cost, self.capacity)
         waited, told = 0.0, False
         while True:
+            if cancelled and cancelled():
+                raise Cancelled()
             with self._lock:
                 now = self._clock()
                 wait = self._wait_needed(cost, now)
@@ -61,10 +72,16 @@ class RateLimiter:
                     return waited
             if waited + wait > self.max_wait:
                 raise LimitReached(wait)
-            if not told:
+            if not told and wait >= 2:  # a wait of a second or so isn't worth a message
                 notify(f"  (Staying inside Groq's free {self.label} limit: waiting about {wait:.0f} seconds...)")
                 told = True
-            self._sleep(wait + 0.05)
+            remaining = wait + 0.05
+            while remaining > 0:  # sleep in short slices so a cancel is noticed quickly
+                step = min(0.25, remaining)
+                self._sleep(step)
+                remaining -= step
+                if cancelled and cancelled():
+                    raise Cancelled()
             waited += wait + 0.05
 
 

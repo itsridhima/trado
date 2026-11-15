@@ -96,6 +96,7 @@ class Settings:
     llm_reasoning: str  # "" means don't send the setting
     send_screen: bool
     sensitive_pages: str  # "ask", "skip" or "send": what to do when the screen looks like a login/KYC/bank/broker page
+    memory_exchanges: int  # how many recent question-and-answer pairs Trado remembers (0 = none)
     env_file: str  # which key file was loaded ("" if none)
     env_file_synced: bool  # True if that file is inside a cloud-synced folder
     env_overrides: tuple  # names of settings where the Windows environment overrides the key file
@@ -126,6 +127,7 @@ def load_settings() -> Settings:
         llm_reasoning=os.getenv("TRADO_LLM_REASONING", "none").strip(),
         send_screen=_flag("TRADO_SEND_SCREEN", True),
         sensitive_pages=_sensitive_mode(),
+        memory_exchanges=_int("TRADO_MEMORY", 5, 0, 10),
         env_file=str(env_file) if env_file else "",
         env_file_synced=bool(env_file and is_synced_path(env_file)),
         env_overrides=overrides,
