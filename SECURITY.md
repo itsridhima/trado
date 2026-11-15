@@ -38,7 +38,7 @@ No code runs shell commands (`eval`, `exec`, `pickle`, `subprocess`, `os.system`
 | Sent to | What | When |
 |---|---|---|
 | Groq (speech-to-text) | Your recorded voice (WAV, in memory) and a short vocabulary hint | Every question |
-| Groq (AI answer) | The transcript of your question, the system prompt, a JPEG screenshot of the screen under your mouse, and the last few remembered questions and answers as text (up to 5, `TRADO_MEMORY=0` turns this off) | Every question (screenshot can be switched off with `TRADO_SEND_SCREEN=false`) |
+| Groq (AI answer) | The transcript of your question, the system prompt, a JPEG screenshot of the screen under your mouse (only when the question looks like it is about the screen; `TRADO_SCREEN_MODE=always` sends one every time, `TRADO_SEND_SCREEN=false` never), and the last few remembered questions and answers as text (up to 5, `TRADO_MEMORY=0` turns this off) | Every question (the screenshot only when it looks useful) |
 | Nobody else | No analytics, no telemetry, no logs uploaded | n/a |
 
 All requests use HTTPS to `api.groq.com`, with certificate checks left at their safe default and with timeouts.

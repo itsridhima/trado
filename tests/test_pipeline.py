@@ -95,9 +95,10 @@ def says(*chunks):
 
 
 class Harness:
-    def __init__(self, questions, script, memory=5, screenshots=False):
+    def __init__(self, questions, script, memory=5, screenshots=False, screen_mode="auto"):
         env = {"GROQ_API_KEY": FAKE_KEY, "TRADO_MEMORY": str(memory), "TRADO_TTS": "off",
-               "TRADO_SEND_SCREEN": "true" if screenshots else "false"}
+               "TRADO_SEND_SCREEN": "true" if screenshots else "false", "TRADO_SCREEN_MODE": screen_mode}
+        self.guard = mock.Mock(check=mock.Mock(return_value=(True, "")))  # stands in for the sensitive-page check
         with mock.patch.dict(os.environ, env, clear=True), mock.patch("trado.config.find_env_file", return_value=None):
             self.settings = config.load_settings()
         self.stt, self.llm, self.speaker = FakeStt(questions), FakeLlm(script), FakeSpeaker()
@@ -114,7 +115,7 @@ class Harness:
             "HoldToTalkHotkey": FakeHotkey,
             "make_dpi_aware": mock.Mock(),
             "capture_screen_jpeg": mock.Mock(return_value=b"screenshot-bytes"),
-            "PageGuard": mock.Mock(return_value=mock.Mock(check=mock.Mock(return_value=(True, "")))),
+            "PageGuard": mock.Mock(return_value=self.guard),
             "_beep": mock.Mock(),
         }
         for name, replacement in patches.items():
@@ -249,12 +250,33 @@ class MemoryFlowTests(unittest.TestCase):
         self.assertIn("Sorry: Groq had a problem", t.text)
 
     def test_the_screenshot_is_only_sent_with_the_newest_question(self):
-        with Harness(["What is on my screen?", "And now?"], [says("A chart of Nifty."), says("Still the chart.")], screenshots=True) as t:
+        with Harness(["What is on my screen?", "What does this mean now?"], [says("A chart of Nifty."), says("Still the chart.")], screenshots=True) as t:
             t.ask()
             t.ask()
         for call in t.llm.calls:
             self.assertEqual(call["image"], b"screenshot-bytes")
             self.assertTrue(all(isinstance(m["content"], str) for m in call["history"]))  # remembered turns have no pictures
+
+    def test_general_questions_send_no_screenshot_and_show_no_private_page_box(self):
+        with Harness(["What is a SIP?", "What am I looking at?"], [says("A SIP invests regularly."), says("A chart.")], screenshots=True) as t:
+            t.ask()
+            t.ask()
+        self.assertIsNone(t.llm.calls[0]["image"])  # general knowledge: nothing about the screen was sent
+        self.assertEqual(t.llm.calls[1]["image"], b"screenshot-bytes")  # a screen question gets one
+        self.assertEqual(t.guard.check.call_count, 1)  # the private-page box was only consulted when a screenshot was due
+        self.assertIn("This isn't about your screen", t.text)
+
+    def test_always_mode_sends_a_screenshot_with_every_question(self):
+        with Harness(["What is a SIP?"], [says("A SIP invests regularly.")], screenshots=True, screen_mode="always") as t:
+            t.ask()
+        self.assertEqual(t.llm.calls[0]["image"], b"screenshot-bytes")
+        self.assertNotIn("This isn't about your screen", t.text)
+
+    def test_screenshots_off_still_means_off(self):
+        with Harness(["What am I looking at?"], [says("I can't see your screen.")], screenshots=False) as t:
+            t.ask()
+        self.assertIsNone(t.llm.calls[0]["image"])
+        self.assertEqual(t.guard.check.call_count, 0)
 
     def test_the_key_never_appears_in_anything_printed(self):
         with Harness(["What is a SIP?"], [says("A SIP invests regularly.")]) as t:

@@ -11,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LLM_MODEL = "qwen/qwen3.8-27b"
 DEFAULT_STT_MODEL = "whisper-large-v3"  # the full model: a little slower than turbo, a little more accurate
 SENSITIVE_PAGE_MODES = ("ask", "skip", "send")
+SCREEN_MODES = ("auto", "always")
 
 
 def _int(name: str, default: int, low: int, high: int) -> int:
@@ -34,6 +35,11 @@ def _language() -> str:
     if value == "auto":
         return ""
     return value or "en"
+
+
+def _screen_mode() -> str:
+    value = os.getenv("TRADO_SCREEN_MODE", "").strip().lower()
+    return value if value in SCREEN_MODES else "auto"
 
 
 def _sensitive_mode() -> str:
@@ -95,6 +101,7 @@ class Settings:
     llm_model: str
     llm_reasoning: str  # "" means don't send the setting
     send_screen: bool
+    screen_mode: str  # "auto" = send a screenshot only when the question looks screen-related; "always" = every time
     sensitive_pages: str  # "ask", "skip" or "send": what to do when the screen looks like a login/KYC/bank/broker page
     memory_exchanges: int  # how many recent question-and-answer pairs Trado remembers (0 = none)
     env_file: str  # which key file was loaded ("" if none)
@@ -126,6 +133,7 @@ def load_settings() -> Settings:
         llm_model=os.getenv("TRADO_LLM_MODEL", "").strip() or DEFAULT_LLM_MODEL,
         llm_reasoning=os.getenv("TRADO_LLM_REASONING", "none").strip(),
         send_screen=_flag("TRADO_SEND_SCREEN", True),
+        screen_mode=_screen_mode(),
         sensitive_pages=_sensitive_mode(),
         memory_exchanges=_int("TRADO_MEMORY", 5, 0, 10),
         env_file=str(env_file) if env_file else "",

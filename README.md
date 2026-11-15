@@ -61,13 +61,17 @@ Handy extras: `python -m trado --mics` lists microphones, `python -m trado --voi
 Every setting is explained in `.env.example`.
 
 ## Limits and privacy
-- **Your voice and a screenshot leave your computer.** They are sent to Groq to be transcribed and
+- **Your voice, and a screenshot when your question is about the screen, leave your computer.** They are sent to Groq to be transcribed and
   answered. Trado keeps audio and screenshots **in memory only and never saves them to disk**, but
   **Groq's free plan may store this data or use it to improve its services** (check Groq's current terms).
   Groq offers a "Zero Data Retention" data control in its console, which is worth switching on. Close anything
   private first, and never say or show PAN, Aadhaar, passwords, OTPs or bank details. Set
   `TRADO_SEND_SCREEN=false` to stop sending screenshots.
 - **Trado never acts for you.** It will not click, type or submit anything.
+- **Screenshots only when they help.** Trado sends a screenshot only when your question looks like it is about the screen
+  (for example "what am I looking at?" or "what does this chart mean?"). General questions like "What is a SIP?" go
+  without one, which also saves your free limit. When it is unsure, it sends one. Say "look at my screen" to be sure,
+  or set `TRADO_SCREEN_MODE=always` to send one every time. This is a pattern-based guess, so it can be wrong.
 - **Short memory.** Trado remembers your last 5 questions and its answers, as text, while it is open, so follow-ups like
   "and what does that mean?" work. That text is sent to Groq with each new question. It is never saved to disk, never
   includes screenshots, and is cleared when you quit or say "forget that". Private-looking details are hidden before they

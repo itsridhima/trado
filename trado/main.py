@@ -10,6 +10,7 @@ from trado.llm import LlmError, create_llm_provider
 from trado.memory import ConversationMemory, is_forget_request, is_non_answer
 from trado.privacy import redact_sensitive
 from trado.screen import capture_screen_jpeg, make_dpi_aware
+from trado.screen_need import needs_screenshot
 from trado.sensitive_page import PageGuard
 from trado.stt import SttError, create_provider
 from trado.textsafe import sanitize_message, strip_control
@@ -153,16 +154,19 @@ def main() -> None:
 
             image = None
             if settings.send_screen:
-                allowed, note = page_guard.check()  # may show a Yes/No box on login, KYC, bank or broker pages
-                if note:
-                    print(note)
-                if not is_current(turn):
-                    return
-                if allowed:
-                    try:
-                        image = capture_screen_jpeg()  # kept in memory only
-                    except Exception as err:
-                        print(f"(Couldn't capture the screen: {type(err).__name__}. Answering without it.)")
+                if settings.screen_mode == "auto" and not needs_screenshot(question, len(memory) > 0):
+                    print("(This isn't about your screen, so no screenshot was sent. Say \"look at my screen\" to include one.)")
+                else:
+                    allowed, note = page_guard.check()  # may show a Yes/No box on login, KYC, bank or broker pages
+                    if note:
+                        print(note)
+                    if not is_current(turn):
+                        return
+                    if allowed:
+                        try:
+                            image = capture_screen_jpeg()  # kept in memory only
+                        except Exception as err:
+                            print(f"(Couldn't capture the screen: {type(err).__name__}. Answering without it.)")
 
             print("Thinking...")
             started = False
@@ -244,7 +248,11 @@ def main() -> None:
     print(f"Hold [{describe_hotkey(hotkey_spec)}] and speak after the beep. Release to ask. Press it again to stop Trado talking. Ctrl+C quits (or Ctrl+Break).")
     print(f"Speech: {settings.stt_model}   AI: {settings.llm_model}   Language: {settings.stt_language or 'auto-detect'}   {voice_note}")
     if settings.send_screen:
-        print("Privacy: your voice and a screenshot of the screen under your mouse are sent to Groq.")
+        if settings.screen_mode == "auto":
+            print("Privacy: your voice is sent to Groq, and so is a screenshot of the screen under your mouse, but only")
+            print("         when your question looks like it is about the screen (TRADO_SCREEN_MODE=always sends every time).")
+        else:
+            print("Privacy: your voice and a screenshot of the screen under your mouse are sent to Groq with every question.")
         print("         Groq's free plan may store this data or use it to improve its services (check Groq's terms;")
         print("         its Zero Data Retention setting is worth switching on). Close anything private first.")
         print("         Set TRADO_SEND_SCREEN=false to turn screenshots off.")

@@ -8,6 +8,9 @@
 - When the free limit is full, Trado now waits up to a minute and says so, instead of refusing; pressing the hotkey cancels
   the wait and nothing is sent.
 - "I didn't catch that" replies are no longer remembered, and asking about a cleared conversation now gets a clear answer.
+- Screenshots are now sent only when your question looks like it is about the screen ("What is a SIP?" goes without one; "what am I
+  looking at?" sends one; when unsure it sends one). `TRADO_SCREEN_MODE=always` restores the old behaviour. About three times as many
+  questions fit in the free per-minute limit, and less of your screen is sent to Groq.
 - Waits shorter than 2 seconds are silent (no more "waiting about 0 seconds").
 
 ### Security hardening (see SECURITY.md)
