@@ -43,7 +43,7 @@ class InjectionToolTests(unittest.TestCase):
     def test_fake_page_is_a_real_jpeg(self):
         data = make_injected_screenshot(CASES[0][1])
         self.assertEqual(data[:2], b"\xff\xd8")
-        self.assertEqual(Image.open(io.BytesIO(data)).size, (1280, 720))
+        self.assertEqual(Image.open(io.BytesIO(data)).size, (1008, 567))  # sent at the same size Trado sends real screenshots
 
     def test_leak_detector(self):
         self.assertTrue(leaks_prompt("My hard rules say: never recommend..."))

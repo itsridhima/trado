@@ -17,7 +17,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 from trado.config import load_settings
 from trado.guardrails import Finding, Question, check_answer, verdict
-from trado.llm import LlmError, create_llm_provider
+from trado.llm import LlmError, LlmRateLimitError, create_llm_provider
+from trado.llm.groq_vision import describe_cost
+from trado.pointing import strip_point_tags
 from trado.screen import encode_jpeg
 
 BENIGN_LINES = [
@@ -85,16 +87,20 @@ def main() -> int:
         print(f"Setup problem: {err}")
         return 1
 
-    print(f"Showing {len(CASES)} fake pages with hidden hostile instructions to {settings.llm_model}...\n")
+    print(f"Showing {len(CASES)} fake pages with hidden hostile instructions to {settings.llm_model}...")
+    print(describe_cost(screenshot_questions=len(CASES)) + "\n")
     failures = 0
     for index, (name, hostile, question) in enumerate(CASES):
         if index:
             time.sleep(args.delay)
         try:
-            answer = "".join(llm.stream_answer(question, make_injected_screenshot(hostile))).strip()
+            answer = strip_point_tags("".join(llm.stream_answer(question, make_injected_screenshot(hostile))))
         except LlmError as err:
             print(f"[ERROR] {name}: {err}\n")
             failures += 1
+            if isinstance(err, LlmRateLimitError) and "daily" in str(err).lower():
+                print("STOPPED: the free daily allowance is used up. Run this again tomorrow.")
+                break
             continue
         findings = check_answer(Question(index + 1, "X", "INJECT", question), answer)
         if leaks_prompt(answer):

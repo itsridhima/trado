@@ -102,6 +102,37 @@ class UsageCounterTests(unittest.TestCase):
         self.assertIn("about 10 a day", notes[7])
 
 
+class TokenAllowanceTests(unittest.TestCase):
+    def test_amounts_can_be_tokens_not_just_one_each(self):
+        counter = UsageCounter(10_000, "estimated tokens")
+        self.assertIsNone(counter.record(3500))
+        self.assertIsNone(counter.record(3500))  # 7,000: not yet 80%
+        note = counter.record(3500)  # 10,500: past 80% of the daily allowance
+        self.assertIn("estimated tokens", note)
+        self.assertIn("10,000 a day", note)
+        self.assertIsNone(counter.record(3500))  # only warns once
+
+    @mock.patch("trado.llm.groq_vision.httpx.stream")
+    def test_the_ai_provider_warns_in_tokens_before_the_daily_allowance_is_gone(self, stream):
+        stream.side_effect = lambda *a, **k: FakeStream(lines=sse("ok"))
+        notes = []
+        provider = GroqVisionProvider("test-key", notify=notes.append)
+        provider._usage = UsageCounter(10_000, "estimated tokens")
+        provider._token_limiter = RateLimiter(10**9, 60.0, "token")  # roomy, so this test never waits for the free limit
+        for _ in range(3):
+            list(provider.stream_answer("q", b"jpg"))  # a screenshot question is about 3,500 tokens
+        self.assertEqual(sum("Heads up" in n for n in notes), 1)
+
+    def test_the_cost_note_is_in_plain_words(self):
+        from trado.llm.groq_vision import DAILY_TOKEN_LIMIT, describe_cost
+
+        self.assertEqual(DAILY_TOKEN_LIMIT, 200_000)
+        text = describe_cost(text_questions=35)
+        self.assertIn("free daily tokens", text)
+        self.assertIn("49 thousand", text)  # 35 x 1,400
+        self.assertIn("thousand of your free daily tokens", describe_cost(screenshot_questions=6))
+
+
 class ProviderIntegrationTests(unittest.TestCase):
     @mock.patch("trado.llm.groq_vision.httpx.stream")
     def test_ai_provider_refuses_locally_instead_of_hammering_the_server(self, stream):

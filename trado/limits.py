@@ -93,12 +93,13 @@ class UsageCounter:
         self.count = 0
         self._warned = False
 
-    def record(self) -> str | None:
-        self.count += 1
+    def record(self, amount: int = 1) -> str | None:
+        """Add `amount` (1 request, or an estimate of tokens). Returns a warning the first time 80% is passed."""
+        self.count += amount
         if not self._warned and self.count >= self.daily_limit * self.warn_at:
             self._warned = True
             return (
-                f"  (Heads up: {self.count} {self.what} used this session. Groq's free plan allows about "
-                f"{self.daily_limit} a day, so Trado may soon ask you to wait until tomorrow.)"
+                f"  (Heads up: about {self.count:,} {self.what} used this session. Groq's free plan allows about "
+                f"{self.daily_limit:,} a day, so Trado may soon ask you to wait until tomorrow.)"
             )
         return None

@@ -2,11 +2,14 @@
 
 import ctypes
 import io
+from dataclasses import dataclass
 
 import mss
 from PIL import Image
 
-MAX_SIDE = 1568  # longest side after shrinking; keeps text readable and uploads small
+from trado.pointing import Geometry
+
+MAX_SIDE = 1008  # longest side after shrinking. At this size the AI's sideways pointer positions were measured to be accurate
 JPEG_QUALITY = 80
 
 
@@ -50,8 +53,24 @@ def _pick_monitor(monitors: list[dict]) -> dict:
     return singles[0]  # primary screen
 
 
-def encode_jpeg(image: Image.Image, max_side: int = MAX_SIDE, quality: int = JPEG_QUALITY) -> bytes:
-    """Shrink (keeping the shape) and compress an image to JPEG bytes, in memory."""
+@dataclass(frozen=True)
+class Capture:
+    """A screenshot (in memory only) plus what is needed to turn a position in it into a real screen position."""
+
+    jpeg: bytes
+    image_size: tuple[int, int]  # size of the shrunk picture that is sent to the AI
+    monitor: tuple[int, int, int, int]  # left, top, width, height of the captured monitor in real screen pixels
+
+    @property
+    def geometry(self) -> Geometry:
+        left, top, width, height = self.monitor
+        return Geometry(self.image_size[0], self.image_size[1], left, top, width, height)
+
+
+def encode_jpeg_sized(
+    image: Image.Image, max_side: int = MAX_SIDE, quality: int = JPEG_QUALITY
+) -> tuple[bytes, tuple[int, int]]:
+    """Shrink (keeping the shape) and compress an image to JPEG bytes, in memory. Also returns the final size."""
     image = image.convert("RGB")
     longest = max(image.size)
     if longest > max_side:
@@ -62,14 +81,25 @@ def encode_jpeg(image: Image.Image, max_side: int = MAX_SIDE, quality: int = JPE
         )
     buffer = io.BytesIO()
     image.save(buffer, format="JPEG", quality=quality)
-    return buffer.getvalue()
+    return buffer.getvalue(), image.size
 
 
-def capture_screen_jpeg() -> bytes:
-    """Grab the screen under the mouse and return it as JPEG bytes (not saved anywhere)."""
+def encode_jpeg(image: Image.Image, max_side: int = MAX_SIDE, quality: int = JPEG_QUALITY) -> bytes:
+    """Shrink and compress an image to JPEG bytes, in memory."""
+    return encode_jpeg_sized(image, max_side, quality)[0]
+
+
+def capture_screen(max_side: int = MAX_SIDE) -> Capture:
+    """Grab the screen under the mouse. Kept in memory only, never saved anywhere."""
     make_dpi_aware()
     with mss.mss() as sct:
         monitor = _pick_monitor(sct.monitors)
         shot = sct.grab(monitor)
         image = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
-    return encode_jpeg(image)
+    jpeg, size = encode_jpeg_sized(image, max_side)
+    return Capture(jpeg, size, (monitor["left"], monitor["top"], monitor["width"], monitor["height"]))
+
+
+def capture_screen_jpeg() -> bytes:
+    """Like capture_screen(), but returns only the JPEG bytes."""
+    return capture_screen().jpeg

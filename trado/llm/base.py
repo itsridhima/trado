@@ -20,9 +20,11 @@ class LlmProvider(ABC):
         image_jpeg: bytes | None = None,
         history: list[dict] | None = None,
         cancelled: Callable[[], bool] | None = None,
+        image_size: tuple[int, int] | None = None,
     ) -> Iterator[str]:
         """Yield the answer in small pieces as it arrives. Raise LlmError on failure.
 
         `history` is earlier turns as [{"role": "user"|"assistant", "content": text}, ...], oldest first.
         Only the current question carries a screenshot. If `cancelled()` becomes true before the request is sent
-        (for example while waiting for the free limit), stop quietly without sending it."""
+        (for example while waiting for the free limit), stop quietly without sending it. `image_size` is the width and
+        height in pixels of the screenshot, so the AI can say where something is for pointing."""

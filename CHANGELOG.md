@@ -1,6 +1,27 @@
 # Changelog
 
 ## Unreleased
+### Round 2, step 3 (first half): pointing, printed targets only
+- The AI now ends screen answers with a hidden tag like `[POINT:784,490:Quantity box]`. Trado hides the tag from the screen, the
+  voice and the memory, checks it (whole numbers only, clamped to the screen, label cleaned, anything odd is ignored), turns it
+  into a real screen position (including shrunk screenshots and multi-monitor setups) and prints where it would point.
+  There is no glowing cursor yet. `TRADO_POINTING=off` hides the printed lines.
+- New `python -m tools.run_pointing_test`: draws a fake broker page with known positions and measures how accurately the AI
+  points, including whether it uses real pixels or a 0-1000 scale.
+- Screen capture now reports its size and monitor position; the AI is told the screenshot's size.
+- First real calibration: the free AI model's positions were about 62% of the true height (consistently) and partly off
+  sideways, so pointing is not yet reliable. A smaller picture (1008 wide) fixed the sideways error. Re-scoring both real runs
+  shows the AI's up-and-down number is too small by height/width; multiplying it by width/height puts all 12 answers inside the
+  right boxes. A third run on a 16:9 page confirmed it (6 of 6, typical miss 16 pixels; the AI's height numbers were 0.56 of the
+  truth, exactly 567/1008), ruling out a constant factor.
+- The daily-usage warning now counts estimated TOKENS (about 200,000 a day on the free plan) instead of requests, so it warns in time.
+  The test tools say what a run will cost and stop at once when the daily allowance is gone; the pointing test now reports
+  INCOMPLETE (not a false verdict) when some questions failed.
+- Trado now sends screenshots 1008 pixels wide (`TRADO_SCREEN_MAX_SIDE`) and corrects the AI's up-and-down pointer number by
+  width/height for models known to need it (`TRADO_POINT_FIX=auto|aspect|none`; auto = the default model). The calibration tool
+  now also scores answers through Trado's own pointing code.
+- Rule checker fixes (two false alarms), a new check that fails any reply telling you to tap/click/press a buy or confirm
+  button, and two new guardrail questions about buttons. The prompt now says plainly never to tell you to press a button.
 ### Round 2, step 1: short memory
 - Trado remembers your last 5 questions and answers (text only, in memory only) so follow-ups like "and what does that mean?"
   work. Say "forget that" to clear it; `TRADO_MEMORY=0` turns it off. See the privacy notes in README.md and SECURITY.md.

@@ -17,9 +17,19 @@ DEFAULT_MODEL = "qwen/qwen3.8-27b"
 
 MAX_ATTEMPTS = 3
 MAX_WAIT_SECONDS = 45.0
-TEXT_TOKEN_COST = 1000  # rough size of the prompt plus a short answer, for the per-minute token limit
+TEXT_TOKEN_COST = 1400  # rough size of the prompt (about 1,200 tokens) plus a short answer, for the per-minute limit
 IMAGE_TOKEN_COST = 2100  # each screenshot counts as about 2,048 tokens on Groq
-MAX_ANSWER_TOKENS = 350  # answers are short; this also protects the free tokens-per-minute limit
+DAILY_TOKEN_LIMIT = 200_000  # Groq's free plan for this model: about 200,000 tokens a day
+MAX_ANSWER_TOKENS = 350
+
+
+def describe_cost(text_questions: int = 0, screenshot_questions: int = 0) -> str:
+    """A plain-words estimate of how much of the free daily allowance some questions will use."""
+    tokens = text_questions * TEXT_TOKEN_COST + screenshot_questions * (TEXT_TOKEN_COST + IMAGE_TOKEN_COST)
+    return (
+        f"(This will use roughly {tokens // 1000:,} thousand of your free daily tokens; Groq's free plan allows about "
+        f"{DAILY_TOKEN_LIMIT // 1000} thousand a day, shared with everything else you ask today.)"
+    )  # answers are short; this also protects the free tokens-per-minute limit
 
 
 class ThinkFilter:
@@ -93,10 +103,17 @@ class GroqVisionProvider(LlmProvider):
         # A wait of up to a minute is allowed (it is announced, and pressing the hotkey cancels it).
         self._request_limiter = RateLimiter(28, 60.0, "request", max_wait=60.0)
         self._token_limiter = RateLimiter(7000, 60.0, "token", max_wait=60.0)
-        self._usage = UsageCounter(1000, "AI requests")
+        # The binding daily limit is TOKENS (about 200,000 a day on the free plan), not requests. Counted as estimates.
+        self._usage = UsageCounter(DAILY_TOKEN_LIMIT, "estimated tokens")
 
-    def _payload(self, question: str, image_jpeg: bytes | None, history: list[dict] | None = None) -> dict:
-        text = build_user_text(question, image_jpeg is not None)
+    def _payload(
+        self,
+        question: str,
+        image_jpeg: bytes | None,
+        history: list[dict] | None = None,
+        image_size: tuple[int, int] | None = None,
+    ) -> dict:
+        text = build_user_text(question, image_jpeg is not None, image_size)
         earlier = [
             {"role": m["role"], "content": str(m["content"])}
             for m in (history or [])
@@ -131,8 +148,9 @@ class GroqVisionProvider(LlmProvider):
         image_jpeg: bytes | None = None,
         history: list[dict] | None = None,
         cancelled: Callable[[], bool] | None = None,
+        image_size: tuple[int, int] | None = None,
     ) -> Iterator[str]:
-        payload = self._payload(question, image_jpeg, history)
+        payload = self._payload(question, image_jpeg, history, image_size)
         headers = {"Authorization": f"Bearer {self._api_key}"}
         attempt = 0
         remembered_chars = sum(len(m["content"]) for m in payload["messages"][1:-1])  # earlier turns
@@ -162,7 +180,7 @@ class GroqVisionProvider(LlmProvider):
                 ) as response:
                     status = response.status_code
                     if status == 200:
-                        note = self._usage.record()
+                        note = self._usage.record(tokens)
                         if note:
                             self._notify(note)
                         yield from self._read_stream(response)

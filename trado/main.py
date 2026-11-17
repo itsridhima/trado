@@ -9,7 +9,8 @@ from trado.hotkey import HoldToTalkHotkey, describe_hotkey
 from trado.llm import LlmError, create_llm_provider
 from trado.memory import ConversationMemory, is_forget_request, is_non_answer
 from trado.privacy import redact_sensitive
-from trado.screen import capture_screen_jpeg, make_dpi_aware
+from trado.pointing import PointTagFilter, describe_target, parse_point_tag, resolve_height_fix
+from trado.screen import capture_screen, make_dpi_aware
 from trado.screen_need import needs_screenshot
 from trado.sensitive_page import PageGuard
 from trado.stt import SttError, create_provider
@@ -104,6 +105,9 @@ def main() -> None:
         print(f"Voice problem: {err}\n  Carrying on with text only.")
         speaker = NullSpeaker()
 
+    # Some AI models give an up-and-down pointer number that is too small by height/width. This was measured for the
+    # default model with python -m tools.run_pointing_test, so the correction is applied only to models known to need it.
+    height_fix = resolve_height_fix(settings.llm_model, settings.point_fix)
     page_guard = PageGuard(settings.sensitive_pages)
     memory = ConversationMemory(settings.memory_exchanges)  # recent questions and answers, text only, never saved
 
@@ -153,6 +157,7 @@ def main() -> None:
                 return
 
             image = None
+            capture = None  # the screenshot plus where it came from, so a pointer position can become a real one
             if settings.send_screen:
                 if settings.screen_mode == "auto" and not needs_screenshot(question, len(memory) > 0):
                     print("(This isn't about your screen, so no screenshot was sent. Say \"look at my screen\" to include one.)")
@@ -164,7 +169,8 @@ def main() -> None:
                         return
                     if allowed:
                         try:
-                            image = capture_screen_jpeg()  # kept in memory only
+                            capture = capture_screen(settings.screen_max_side)  # kept in memory only
+                            image = capture.jpeg
                         except Exception as err:
                             print(f"(Couldn't capture the screen: {type(err).__name__}. Answering without it.)")
 
@@ -187,13 +193,25 @@ def main() -> None:
                     if spoken:
                         speaker.say(spoken)
 
+            tag_filter = PointTagFilter()  # hides the [POINT:...] tag from the screen, the voice and the memory
             try:
-                for piece in llm.stream_answer(question, image, memory.messages(), cancelled=lambda: not is_current(turn)):
+                for piece in llm.stream_answer(
+                    question, image, memory.messages(),
+                    cancelled=lambda: not is_current(turn),
+                    image_size=capture.image_size if capture else None,
+                ):
                     if not is_current(turn):
                         return  # you pressed the key again: stop quietly
-                    emit(splitter.feed(piece))
+                    emit(splitter.feed(tag_filter.feed(piece)))
+                emit(splitter.feed(tag_filter.flush()))
                 emit(splitter.flush())
                 print()
+                if settings.pointing != "off" and is_current(turn):
+                    target = parse_point_tag(
+                        tag_filter.tag, capture.geometry if capture else None, correct_height=height_fix
+                    )
+                    if target:
+                        print(describe_target(target))
             except LlmError as err:
                 if is_current(turn):
                     message = sanitize_message(str(err))
@@ -260,6 +278,11 @@ def main() -> None:
         print(f"         Login, KYC, bank and broker pages: Trado {guard_text} (TRADO_SENSITIVE_PAGES=ask|skip|send).")
     else:
         print("Screenshots are OFF (TRADO_SEND_SCREEN=false). Only your question is sent.")
+    if settings.pointing == "print":
+        print("Pointing (early test): when your question is about something on the screen, Trado prints where it would")
+        print("         point. There is no glowing cursor yet. Set TRADO_POINTING=off to hide those lines.")
+        print(f"         Screenshots are sent {settings.screen_max_side} pixels wide; height correction for this model: "
+              f"{'on' if height_fix else 'off'}.")
     if settings.memory_exchanges:
         print(f"Memory: Trado remembers your last {settings.memory_exchanges} questions while it is open, so follow-ups work.")
         print("        That text is sent to Groq with each new question. Say \"forget that\" to clear it. Never saved to disk.")

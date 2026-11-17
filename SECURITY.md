@@ -133,6 +133,15 @@ versions to public vulnerability databases.
 To repeat the scan, install `pip-audit` in a separate environment (not Trado's) and run
 `pip-audit --path <Trado environment>\Lib\site-packages`. Results change over time, so repeat it before each release.
 
+## Pointing (Round 2): how the AI's pointer tag is handled
+The AI is untrusted, so the hidden `[POINT:x,y:label]` tag is treated like any other outside input (`trado/pointing.py`):
+only whole numbers in the exact format are accepted; positions are clamped to the screenshot and then to the real monitor,
+so nothing can land off the screen; the label is stripped of control codes and brackets and cut to 40 characters; any other
+format, a missing screenshot, or a tag that never finishes is ignored. The tag is removed before anything is shown, spoken or
+remembered. Pointing never clicks or types. For now Trado only *prints* the position; no window is drawn. The prompt tells
+the AI never to point at a button in order to tell you to press it. A hostile page could still make the AI point at the
+wrong thing, which is why the prompt-injection test (`python -m tools.run_injection`) matters.
+
 Known limits of these fixes: the page check reads only the title of the front window; redaction is pattern
 based and can miss or over-hide; the AI may still be fooled by a cleverly worded page.
 

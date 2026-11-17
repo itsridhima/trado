@@ -21,6 +21,9 @@ There is no installer yet.
 4. It shows the answer and **speaks it sentence by sentence** with the built-in Windows voice.
 5. Press the hotkey again at any time to interrupt it.
 6. It remembers your last few questions, so follow-ups like "and what does that mean?" work. Say "forget that" to clear it.
+7. *Early test:* when your question is about one thing on the screen, Trado prints where it would point (a position on
+   your screen). The glowing cursor that actually flies there is the next step and is not built yet. The free AI model
+   needs a small, measured correction to its pointer numbers; Trado applies it automatically for the default model.
 
 **Not built yet:** the glowing "pointing" cursor, a built-in trading knowledge
 base, a tray icon, a first-run setup screen and an installer. Only English is supported for now.
@@ -68,6 +71,9 @@ Every setting is explained in `.env.example`.
   private first, and never say or show PAN, Aadhaar, passwords, OTPs or bank details. Set
   `TRADO_SEND_SCREEN=false` to stop sending screenshots.
 - **Trado never acts for you.** It will not click, type or submit anything.
+- **Screenshots are shrunk before they are sent** to about 1008 pixels on the longest side (`TRADO_SCREEN_MAX_SIDE`, up to
+  1568). At that size the AI's pointer positions were measured to be accurate; very small text on screen can be harder to
+  read, so raise it if that matters more to you than pointing.
 - **Screenshots only when they help.** Trado sends a screenshot only when your question looks like it is about the screen
   (for example "what am I looking at?" or "what does this chart mean?"). General questions like "What is a SIP?" go
   without one, which also saves your free limit. When it is unsure, it sends one. Say "look at my screen" to be sure,
@@ -93,6 +99,10 @@ Every setting is explained in `.env.example`.
   clean slate.
 - **Waits are normal.** The free plan allows only about two screenshot questions a minute. Trado waits (up to a minute) and
   says so; press the hotkey again to cancel the wait and nothing is sent.
+- **A daily allowance too.** Groq's free plan allows about 200,000 tokens a day for the AI, which is roughly 50 questions
+  with a screenshot or 140 without. Trado warns you when you are close, and says plainly when it has run out (it
+  resets within a day). The test tools use the same allowance and tell you their cost first: `run_guardrails` about 49
+  thousand, `run_injection` and `run_pointing_test` about 21 thousand each.
 - **Free-tier limits and changes.** Free AI models get retired and limits change. Model names are set in
   `.env` so you can update them. If something stops working, check `.env.example` and Groq's model list.
 - **No telemetry.** Trado sends nothing anywhere except to Groq, using your own key.
@@ -101,9 +111,13 @@ Every setting is explained in `.env.example`.
 ```powershell
 python -m unittest discover tests
 python -m tools.run_guardrails
+python -m tools.run_injection
+python -m tools.run_pointing_test
 ```
-The second command asks the AI the questions in `tests/guardrail_questions.md` and reports any answer
-that breaks the product rules (it needs your Groq key and takes a few minutes on the free plan).
+The first command checks the code offline. The others need your Groq key and take a few minutes on the free plan:
+`run_guardrails` asks the AI the questions in `tests/guardrail_questions.md` and reports any answer that breaks the
+product rules; `run_injection` shows it fake pages with hostile instructions; `run_pointing_test` draws a fake broker
+page and measures how accurately the AI points at things whose position is known (add `--max-side 1008` to test a smaller picture).
 
 ## Contributing and security
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Changes are listed in

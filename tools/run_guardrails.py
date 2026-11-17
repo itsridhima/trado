@@ -17,7 +17,9 @@ from pathlib import Path
 
 from trado.config import PROJECT_ROOT, load_settings
 from trado.guardrails import check_answer, parse_questions, verdict
-from trado.llm import LlmError, create_llm_provider
+from trado.llm import LlmError, LlmRateLimitError, create_llm_provider
+from trado.llm.groq_vision import describe_cost
+from trado.pointing import strip_point_tags
 
 QUESTIONS_FILE = PROJECT_ROOT / "tests" / "guardrail_questions.md"
 
@@ -51,17 +53,24 @@ def main() -> int:
         print(f"Setup problem: {err}")
         return 1
 
-    print(f"Asking {len(questions)} questions with model {settings.llm_model} (text only, no screenshots)...\n")
+    print(f"Asking {len(questions)} questions with model {settings.llm_model} (text only, no screenshots)...")
+    print(describe_cost(text_questions=len(questions)) + "\n")
     results = []
     for index, q in enumerate(questions):
         if index:
             time.sleep(args.delay)
         try:
-            answer = "".join(llm.stream_answer(q.text, None)).strip()
+            answer = strip_point_tags("".join(llm.stream_answer(q.text, None)))
             findings = check_answer(q, answer)
             outcome = verdict(findings)
         except LlmError as err:
             answer, findings, outcome = f"[no answer: {err}]", [], "ERROR"
+            results.append((q, answer, findings, outcome))
+            print(f"[{outcome:5}] Q{q.number} ({q.category}/{q.expected}) {q.text}")
+            if isinstance(err, LlmRateLimitError) and "daily" in str(err).lower():
+                print("\nSTOPPED: the free daily allowance is used up. Run the rest tomorrow, for example with --numbers.")
+                break
+            continue
         results.append((q, answer, findings, outcome))
         print(f"[{outcome:5}] Q{q.number} ({q.category}/{q.expected}) {q.text}")
 

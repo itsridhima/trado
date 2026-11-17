@@ -15,6 +15,7 @@ from unittest import mock
 from trado import config
 from trado import main as trado_main
 from trado.llm.base import LlmError
+from trado.screen import Capture
 
 FAKE_KEY = "gsk_FAKE0123456789abcdefghijklmnop"
 
@@ -81,9 +82,9 @@ class FakeLlm:
     def __init__(self, script):
         self.script, self.calls = list(script), []
 
-    def stream_answer(self, question, image_jpeg=None, history=None, cancelled=None):
+    def stream_answer(self, question, image_jpeg=None, history=None, cancelled=None, image_size=None):
         self.calls.append({"question": question, "image": image_jpeg, "history": list(history or []),
-                           "cancelled": cancelled})
+                           "cancelled": cancelled, "image_size": image_size})
         step = self.script.pop(0)
         if isinstance(step, Exception):
             raise step
@@ -95,9 +96,11 @@ def says(*chunks):
 
 
 class Harness:
-    def __init__(self, questions, script, memory=5, screenshots=False, screen_mode="auto"):
+    def __init__(self, questions, script, memory=5, screenshots=False, screen_mode="auto", pointing="print",
+                 point_fix="none", model=""):
         env = {"GROQ_API_KEY": FAKE_KEY, "TRADO_MEMORY": str(memory), "TRADO_TTS": "off",
-               "TRADO_SEND_SCREEN": "true" if screenshots else "false", "TRADO_SCREEN_MODE": screen_mode}
+               "TRADO_SEND_SCREEN": "true" if screenshots else "false", "TRADO_SCREEN_MODE": screen_mode,
+               "TRADO_POINTING": pointing, "TRADO_POINT_FIX": point_fix, "TRADO_LLM_MODEL": model}
         self.guard = mock.Mock(check=mock.Mock(return_value=(True, "")))  # stands in for the sensitive-page check
         with mock.patch.dict(os.environ, env, clear=True), mock.patch("trado.config.find_env_file", return_value=None):
             self.settings = config.load_settings()
@@ -114,7 +117,8 @@ class Harness:
             "Recorder": FakeRecorder,
             "HoldToTalkHotkey": FakeHotkey,
             "make_dpi_aware": mock.Mock(),
-            "capture_screen_jpeg": mock.Mock(return_value=b"screenshot-bytes"),
+            # a 1920x1200 monitor whose screenshot was shrunk to 1568x980 before it was sent
+            "capture_screen": mock.Mock(return_value=Capture(b"screenshot-bytes", (1568, 980), (0, 0, 1920, 1200))),
             "PageGuard": mock.Mock(return_value=self.guard),
             "_beep": mock.Mock(),
         }
@@ -278,6 +282,103 @@ class MemoryFlowTests(unittest.TestCase):
         self.assertIsNone(t.llm.calls[0]["image"])
         self.assertEqual(t.guard.check.call_count, 0)
 
+class PointingFlowTests(unittest.TestCase):
+    QUESTION = "What does this box on my screen do?"  # mentions the screen, so a screenshot is sent
+
+    def run_one(self, answer_chunks, pointing="print", screenshots=True):
+        with Harness([self.QUESTION], [says(*answer_chunks)], screenshots=screenshots, pointing=pointing) as t:
+            t.ask()
+        return t
+
+    def test_the_tag_is_hidden_and_the_position_is_printed(self):
+        t = self.run_one(["This box is where you type how many shares. ", "[POINT:784,490:Quantity box]"])
+        self.assertNotIn("[POINT", t.text)  # not on screen
+        self.assertNotIn("POINT", " ".join(t.speaker.said))  # not spoken
+        self.assertIn("This box is where you type how many shares.", t.text)
+        self.assertIn('Would point at screen position (960, 600) "Quantity box"', t.text)  # 1568x980 picture -> 1920x1200 monitor
+
+    def test_the_tag_is_hidden_even_when_it_arrives_in_tiny_pieces(self):
+        text = "It sets the quantity. [POINT:784,490:Quantity box]"
+        t = self.run_one([text[i:i + 3] for i in range(0, len(text), 3)])
+        self.assertNotIn("[POINT", t.text)
+        self.assertNotIn("POINT", " ".join(t.speaker.said))
+        self.assertIn("(960, 600)", t.text)
+
+    def test_none_junk_and_unfinished_tags_print_nothing(self):
+        for tag in ["[POINT:none]", "[POINT:abc,def:x]", "[POINT:5000000,3:big]", "[POINT:10,20:Thing", "[POINT:-5,10:neg]"]:
+            t = self.run_one(["Nothing specific here. ", tag])
+            self.assertNotIn("Would point", t.text, tag)
+            self.assertNotIn("POINT", " ".join(t.speaker.said), tag)
+
+    def test_an_off_screen_position_is_pulled_back_onto_the_screen(self):
+        t = self.run_one(["Down in the corner. ", "[POINT:99999,99999:Corner]"])
+        self.assertIn("(1919, 1199)", t.text)  # the last real pixel, never beyond it
+
+    def test_no_screenshot_means_no_pointing_but_the_tag_is_still_hidden(self):
+        with Harness(["What is a SIP?"], [says("A SIP invests regularly. ", "[POINT:100,100:Something]")], screenshots=True) as t:
+            t.ask()
+        self.assertNotIn("Would point", t.text)
+        self.assertNotIn("[POINT", t.text)
+        self.assertIsNone(t.llm.calls[0]["image_size"])
+
+    def test_pointing_off_hides_the_tag_and_prints_nothing(self):
+        t = self.run_one(["This is the box. ", "[POINT:784,490:Quantity box]"], pointing="off")
+        self.assertNotIn("Would point", t.text)
+        self.assertNotIn("[POINT", t.text)
+
+    def run_with(self, tag, **settings):
+        with Harness([self.QUESTION], [says("This is the box. ", tag)], screenshots=True, **settings) as t:
+            t.ask()
+        return t
+
+    def test_the_height_correction_is_applied_for_the_default_model_in_auto_mode(self):
+        # The AI's up-and-down number (490) is too small by height/width = 980/1568. 490 * 1.6 = 784, the true row.
+        t = self.run_with("[POINT:784,490:Quantity box]", point_fix="auto", model="qwen/qwen3.8-27b")
+        self.assertIn("(960, 960)", t.text)  # x unchanged (784 -> 960); y corrected (784 of 980 -> 960 of 1200)
+        self.assertIn("height correction for this model: on", t.text)
+
+    def test_no_correction_for_an_unknown_model_in_auto_mode(self):
+        t = self.run_with("[POINT:784,490:Quantity box]", point_fix="auto", model="some/other-model")
+        self.assertIn("(960, 600)", t.text)
+        self.assertIn("height correction for this model: off", t.text)
+
+    def test_the_correction_can_be_forced_on_or_off(self):
+        self.assertIn("(960, 960)", self.run_with("[POINT:784,490:Box]", point_fix="aspect", model="some/other-model").text)
+        self.assertIn("(960, 600)", self.run_with("[POINT:784,490:Box]", point_fix="none", model="qwen/qwen3.8-27b").text)
+
+    def test_a_corrected_position_that_runs_off_the_picture_is_still_pulled_back(self):
+        t = self.run_with("[POINT:500,900:Low]", point_fix="aspect")  # 900 * 1.6 = 1440, beyond the 980-tall picture
+        self.assertIn("(", t.text.split("Would point at screen position")[1])
+        self.assertIn("1199)", t.text)  # clamped onto the last real row of the monitor
+
+    def test_the_ai_is_told_the_size_of_the_picture(self):
+        t = self.run_one(["Fine. ", "[POINT:none]"])
+        self.assertEqual(t.llm.calls[0]["image_size"], (1568, 980))
+
+    def test_the_tag_never_gets_into_memory(self):
+        with Harness([self.QUESTION, "Explain that more simply."], [
+            says("This is the box for shares. ", "[POINT:784,490:Quantity box]"),
+            says("It is where you type the number. ", "[POINT:none]"),
+        ], screenshots=True) as t:
+            t.ask()
+            t.ask()
+        remembered = " ".join(m["content"] for m in t.llm.calls[1]["history"])
+        self.assertIn("This is the box for shares.", remembered)
+        self.assertNotIn("POINT", remembered)
+
+    def test_an_interrupted_answer_prints_no_pointing(self):
+        def interrupted():
+            yield "The box is right here, and it matters a lot. Another sentence starts "
+            FakeHotkey.instance.on_press()  # you press the hotkey before the answer ends
+            yield "[POINT:784,490:Quantity box]"
+
+        with Harness([self.QUESTION], [interrupted], screenshots=True) as t:
+            FakeHotkey.instance.on_press()
+            t.release()
+        self.assertNotIn("Would point", t.text)
+
+
+class MoreFlowTests(unittest.TestCase):
     def test_the_key_never_appears_in_anything_printed(self):
         with Harness(["What is a SIP?"], [says("A SIP invests regularly.")]) as t:
             t.ask()

@@ -43,6 +43,10 @@ streamed vision-AI answer (Groq qwen/qwen3.8-27b) -> spoken sentence by sentence
 Pressing the hotkey again interrupts. `python -m tools.run_guardrails` checks answers against the product rules.
 Round 2 so far: short memory (last 5 exchanges, text only, in memory only; "forget that" clears it) is built and tested,
 and screenshots are sent only when the question looks screen-related (trado/screen_need.py; TRADO_SCREEN_MODE=always disables the rule).
-Not built yet (rest of Round 2+): pointing and overlay, trading knowledge notes, tray/privacy, first-run setup, installer.
+Pointing, first half: the AI's [POINT:x,y:label] tag is hidden, validated and printed as a screen position (trado/pointing.py);
+the glowing cursor overlay is NOT built yet. Calibrate with `python -m tools.run_pointing_test` (also try --aspect 16:9).
+Measured: for qwen/qwen3.8-27b on Groq the AI's up-and-down pointer number is too small by height/width, and its sideways number
+is accurate only when the screenshot is <= ~1008 px wide; trado/pointing.py applies the fix per model (HEIGHT_FIX_MODELS).
+Not built yet (rest of Round 2+): the pointing overlay, trading knowledge notes, tray/privacy, first-run setup, installer.
 Plan: build in rounds (basic -> add a few things -> refine); the user tests after each round.
 Free tiers change: Llama 4 Scout was retired in July 2026, so keep model names configurable in `.env`.

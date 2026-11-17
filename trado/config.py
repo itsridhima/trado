@@ -12,6 +12,9 @@ DEFAULT_LLM_MODEL = "qwen/qwen3.8-27b"
 DEFAULT_STT_MODEL = "whisper-large-v3"  # the full model: a little slower than turbo, a little more accurate
 SENSITIVE_PAGE_MODES = ("ask", "skip", "send")
 SCREEN_MODES = ("auto", "always")
+POINTING_MODES = ("print", "off")  # "overlay" (a glowing cursor) comes in the next step
+POINT_FIX_MODES = ("auto", "aspect", "none")
+DEFAULT_SCREEN_MAX_SIDE = 1008  # the AI answers positions accurately sideways at this size (measured, see SECURITY/README)
 
 
 def _int(name: str, default: int, low: int, high: int) -> int:
@@ -35,6 +38,16 @@ def _language() -> str:
     if value == "auto":
         return ""
     return value or "en"
+
+
+def _point_fix_mode() -> str:
+    value = os.getenv("TRADO_POINT_FIX", "").strip().lower()
+    return value if value in POINT_FIX_MODES else "auto"
+
+
+def _pointing_mode() -> str:
+    value = os.getenv("TRADO_POINTING", "").strip().lower()
+    return value if value in POINTING_MODES else "print"
 
 
 def _screen_mode() -> str:
@@ -101,6 +114,9 @@ class Settings:
     llm_model: str
     llm_reasoning: str  # "" means don't send the setting
     send_screen: bool
+    point_fix: str  # "auto" = correct the AI's up-and-down pointer number for models known to need it; "aspect"/"none" force it
+    screen_max_side: int  # longest side, in pixels, of the screenshot that is sent
+    pointing: str  # "print" = print where Trado would point (no cursor yet); "off" = ignore pointer tags
     screen_mode: str  # "auto" = send a screenshot only when the question looks screen-related; "always" = every time
     sensitive_pages: str  # "ask", "skip" or "send": what to do when the screen looks like a login/KYC/bank/broker page
     memory_exchanges: int  # how many recent question-and-answer pairs Trado remembers (0 = none)
@@ -133,6 +149,9 @@ def load_settings() -> Settings:
         llm_model=os.getenv("TRADO_LLM_MODEL", "").strip() or DEFAULT_LLM_MODEL,
         llm_reasoning=os.getenv("TRADO_LLM_REASONING", "none").strip(),
         send_screen=_flag("TRADO_SEND_SCREEN", True),
+        point_fix=_point_fix_mode(),
+        screen_max_side=_int("TRADO_SCREEN_MAX_SIDE", DEFAULT_SCREEN_MAX_SIDE, 640, 1568),
+        pointing=_pointing_mode(),
         screen_mode=_screen_mode(),
         sensitive_pages=_sensitive_mode(),
         memory_exchanges=_int("TRADO_MEMORY", 5, 0, 10),
