@@ -9,3 +9,5 @@ pynput==1.8.2            # global hold-to-talk hotkey
 mss==10.2.0              # screenshots (kept in memory only)
 pillow==13.0.0           # shrinks the screenshot before sending
 comtypes==1.5.0          # talks to the built-in Windows voice
+PySide6_Essentials==6.12.0  # the panel, settings window and cursor overlay (Qt; LGPL, see THIRD_PARTY_NOTICES.md)
+shiboken6==6.12.0        # needed by PySide6
