@@ -1,6 +1,14 @@
 # Changelog
 
 ## Unreleased
+### Round 2, step 4 (first half): the app look, as separate test windows (not connected to the AI yet)
+- New `design/panel-mockup.html`: the approved design (a thin line at the top of the screen that opens a small panel).
+- New top panel prototype (`python -m tools.run_panel_prototype`): a thin line at the top-centre that opens a small panel when
+  clicked; it never takes keyboard focus and closes on a click outside it.
+- New glowing cursor prototype (`python -m tools.run_cursor_prototype --demo`): a see-through, click-through window that follows
+  the mouse and flies to a screen point with a label. `--selftest` checks that it stays out of screenshots.
+- Added PySide6 (Qt, LGPL) for these windows. Trado still runs in the terminal; wiring the panel and cursor into the real
+  app is the next step.
 ### Round 2, step 3 (first half): pointing, printed targets only
 - The AI now ends screen answers with a hidden tag like `[POINT:784,490:Quantity box]`. Trado hides the tag from the screen, the
   voice and the memory, checks it (whole numbers only, clamped to the screen, label cleaned, anything odd is ignored), turns it

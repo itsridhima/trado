@@ -47,6 +47,8 @@ Pointing, first half: the AI's [POINT:x,y:label] tag is hidden, validated and pr
 the glowing cursor overlay is NOT built yet. Calibrate with `python -m tools.run_pointing_test` (also try --aspect 16:9).
 Measured: for qwen/qwen3.8-27b on Groq the AI's up-and-down pointer number is too small by height/width, and its sideways number
 is accurate only when the screenshot is <= ~1008 px wide; trado/pointing.py applies the fix per model (HEIGHT_FIX_MODELS).
+UI prototypes (not connected to the AI yet): trado/ui/panel.py (thin top line that opens a small panel) and
+trado/ui/overlay.py (glowing cursor, hidden from screenshots, tested by the user); design in design/panel-mockup.html. Uses PySide6.
 Not built yet (rest of Round 2+): the pointing overlay, trading knowledge notes, tray/privacy, first-run setup, installer.
 Plan: build in rounds (basic -> add a few things -> refine); the user tests after each round.
 Free tiers change: Llama 4 Scout was retired in July 2026, so keep model names configurable in `.env`.

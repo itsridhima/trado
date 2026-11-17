@@ -25,7 +25,10 @@ There is no installer yet.
    your screen). The glowing cursor that actually flies there is the next step and is not built yet. The free AI model
    needs a small, measured correction to its pointer numbers; Trado applies it automatically for the default model.
 
-**Not built yet:** the glowing "pointing" cursor, a built-in trading knowledge
+**Early prototypes (not connected yet):** a thin-line top panel and a glowing cursor, run as separate test windows with
+`python -m tools.run_panel_prototype` and `python -m tools.run_cursor_prototype --demo`.
+
+**Not built yet:** connecting that panel and cursor to Trado, a built-in trading knowledge
 base, a tray icon, a first-run setup screen and an installer. Only English is supported for now.
 
 ## What you need
